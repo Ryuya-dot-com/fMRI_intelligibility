@@ -15,3 +15,8 @@ the intelligibility of different varieties of English in predicting listener
 comprehension. Language Learning, 68(1), 115-146. DOI: 10.1111/lang.12270.
 The Japanese instructions are newly written; the reference's word scoring is
 distinct from this application's mora alignment rules.
+
+ZIP read/write: fflate 0.8.2 (MIT), https://github.com/101arrowz/fflate
+Vendored unmodified npm esm/browser.js as vendor/fflate-0.8.2.mjs.
+License: vendor/fflate-LICENSE.txt. Package SHA-512 verified against npm metadata.
+No compression library is fetched from a CDN during the task.

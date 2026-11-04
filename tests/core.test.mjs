@@ -70,8 +70,8 @@ test('mora segmentation handles contracted sounds, sokuon, nasal and long vowels
   assert.deepEqual(morae('きょう、がっこう。'), ['きょ', 'う', 'が', 'っ', 'こ', 'う']);
   assert.deepEqual(morae('しんぶんとこーひー'), ['し', 'ん', 'ぶ', 'ん', 'と', 'こ', 'ー', 'ひ', 'ー']);
   assert.deepEqual(morae('か\u3099'), ['が']);
-  assert.equal(validResponse('学校'), false);
-  assert.equal(validResponse('ガッコウ'), false);
+  assert.equal(validResponse('学校'), true);
+  assert.equal(validResponse('ガッコウ'), true);
   assert.throws(() => morae('ゃ'));
   assert.throws(() => morae('っゃ'));
 });
@@ -94,7 +94,7 @@ test('score is matched morae / full reference, not one minus edit error rate', (
 
 test('non-scored placeholders and invalid response never become zero performance', () => {
   assert.equal(resultScore(manifest.stimuli[0], 'ねこ', 'placeholder').proportion_correct, undefined);
-  assert.equal(resultScore({reference_kana: 'ねこ'}, '猫', 'study').score_status, 'review_response');
+  assert.equal(resultScore({reference_kana: 'ねこ'}, '猫', 'study').score_status, 'pending_reading');
   const alias = resultScore({reference_kana: 'こうこう', accepted_variants_kana: ['こーこー']}, 'こーこー', 'study');
   assert.equal(alias.proportion_correct, 1);
   assert.equal(alias.scored_reference_kana, 'こーこー');
@@ -115,4 +115,21 @@ test('CSV separates scheduled, observed and event rows, and leaves unpresented t
   assert.equal(rows.filter(r => r.row_type === 'trial').length, 1);
   assert.equal(rows.filter(r => r.row_type === 'event').length, 1);
   assert.equal(rows.find(r => r.row_type === 'trial').proportion_correct, undefined);
+});
+
+
+test('mixed scripts preserve raw input, normalize only kana and defer uncertain readings', () => {
+  for (const answer of ['ガッコウ', 'ｶﾞｯｺｳ', 'がっこう']) {
+    const score = resultScore({reference_kana: 'がっこう'}, answer, 'study');
+    assert.equal(score.proportion_correct, 1);
+    assert.equal(score.response_reading, 'がっこう');
+  }
+  for (const answer of ['学校', '学校でパン', '123', 'abc']) {
+    assert.equal(validResponse(answer), true);
+    const score = resultScore({reference_kana: 'がっこう'}, answer, 'study');
+    assert.equal(score.reading_status, 'needs_review');
+    assert.equal(score.proportion_correct, undefined);
+  }
+  assert.equal(validResponse('あ'.repeat(2001)), false);
+  assert.equal(validResponse(String.fromCharCode(0)), false);
 });

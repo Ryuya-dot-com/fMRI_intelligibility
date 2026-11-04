@@ -5,6 +5,7 @@ import {readFileSync} from 'node:fs';
 import {webcrypto} from 'node:crypto';
 import vm from 'node:vm';
 import * as core from '../site/core.mjs';
+import {sessionMetadata} from '../site/storage.mjs';
 
 const source = readFileSync(new URL('../site/app.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '');
 const manifestText = readFileSync(new URL('../site/stimuli.json', import.meta.url), 'utf8');
@@ -34,7 +35,7 @@ async function harness(options = {}) {
     end() { this.currentTime = this.duration; this.ended = true; this.paused = true; this.emit('ended'); }
   }
   const document = {getElementById: el, querySelectorAll: () => panels, addEventListener() {}, visibilityState: 'visible'};
-  const context = {...core, document, Audio, window: {scrollTo() {}, addEventListener() {}},
+  const context = {...core, sessionMetadata, document, Audio, window: {scrollTo() {}, addEventListener() {}},
     navigator: {userAgent: 'simulated-browser', locks: {request: (name, opts, fn) => { fn({}); return Promise.resolve(); }}},
     performance: {now: () => time += 0.25, timeOrigin: 1000000}, Date: SystemDate, crypto: webcrypto,
     URL: {createObjectURL: () => 'blob:fixture'}, Blob, TextDecoder, structuredClone,
@@ -44,13 +45,19 @@ async function harness(options = {}) {
       return {ok: true, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)};
     },
     openDatabase: async () => ({}), read: async (db, store) => store === 'state' ? options.recover?.id : options.recover,
-    allRecords: async () => [], clearActive: async () => {},
-    save: async (db, session, event) => {
+    allRecords: async () => [], clearActive: async () => {}, loadRecord: async () => ({session: options.recover, events: []}),
+    save: async (db, session, event, trials = []) => {
       if (failSave && !failedOnce) { failedOnce = true; throw new Error('simulated quota failure'); }
       if (failedOnce) lateWrites++;
-      saved = structuredClone(session); if (event) savedEvents.push(structuredClone(event));
+      if (session) saved = {...structuredClone(session), trials: saved?.trials || []};
+      for (const trial of trials) {
+        const index = saved.trials.findIndex(t => t.session_trial_number === trial.session_trial_number);
+        if (index < 0) saved.trials.push(structuredClone(trial));
+        else saved.trials[index] = structuredClone(trial);
+      }
+      if (event) savedEvents.push(structuredClone(event));
     },
-    downloadCsv: (session, events) => downloads.push({session: structuredClone(session), events: structuredClone(events)}),
+    downloadArchive: (session, events) => downloads.push({session: structuredClone(session), events: structuredClone(events)}),
   };
   vm.runInNewContext(source, context);
   // SHA-256 calls run on the worker pool, so wait for the explicit ready state.
@@ -156,16 +163,20 @@ test('system milliseconds, monotonic clocks, browser queue delay and audio posit
   assert.equal(session.trials[1].interrupted_system_epoch_ms, session.completed_system_epoch_ms);
 });
 
-test('invalid orthography does not advance, empty submitted answer is preserved', async () => {
+test('kanji is accepted pending reading review, empty submitted answer is preserved', async () => {
   const h = await harness(); await h.start(); h.media.end();
   h.el('response').value = '今日';
   await h.el('next').onclick();
-  assert.equal(h.media.plays, 1);
-  assert.match(h.el('response-error').textContent, /ひらがな/);
+  assert.equal(h.media.plays, 2);
+  assert.equal(h.saved.trials[0].response, '今日');
+  assert.equal(h.saved.trials[0].score_status, 'pending_reading');
+  assert.equal(h.saved.trials[0].proportion_correct, undefined);
+  h.media.end();
   h.el('response').value = '';
   await h.el('next').onclick(); await tick();
-  assert.equal(h.saved.trials[0].response, '');
-  assert.equal(h.media.plays, 2);
+  assert.equal(h.saved.trials[1].response, '');
+  assert.equal(h.saved.trials[1].proportion_correct, 0);
+  assert.equal(h.media.plays, 3);
 });
 
 test('aborting during audio records incomplete audio and skips scoring', async () => {
@@ -227,4 +238,37 @@ test('blank participant name blocks audio and setup; completed practice is score
   await h.el('next').onclick(); await tick();
   assert.equal(h.saved.trials[0].correct_mora_count, 20);
   assert.equal(h.saved.trials[0].proportion_correct, 1);
+});
+
+
+test('name entry has no input listeners; unchanged text uses references without dropping events', async () => {
+  const h = await harness();
+  assert.deepEqual(h.el('participant-name').listeners, {});
+  assert.deepEqual(h.el('participant').listeners, {});
+  await h.start();
+  h.el('response').value = '学校でパン';
+  h.el('response').emit('input', {data: '学校でパン', inputType: 'insertText'});
+  h.el('response').emit('keydown', {key: 'ArrowLeft', code: 'ArrowLeft'});
+  h.el('response').emit('keyup', {key: 'ArrowLeft', code: 'ArrowLeft'});
+  await tick();
+  const [input, down, up] = h.savedEvents.slice(-3);
+  assert.equal(input.value_json, JSON.stringify('学校でパン'));
+  assert.equal(down.value_json, undefined);
+  assert.equal(up.value_json, undefined);
+  assert.equal(down.value_seq, input.seq);
+  assert.equal(up.value_seq, input.seq);
+  assert.equal(up.seq, input.seq + 2);
+  assert.equal(h.saved.trials[0].response, '学校でパン');
+});
+
+
+test('submission freezes the saved answer while the storage queue completes', async () => {
+  const h = await harness(); await h.start(); h.media.end();
+  h.el('response').value = 'ガッコウ';
+  const submitting = h.el('next').onclick();
+  assert.equal(h.el('response').disabled, true);
+  h.el('response').value = '別の回答'; h.el('response').emit('input');
+  await submitting; await tick();
+  assert.equal(h.saved.trials[0].response, 'ガッコウ');
+  assert.equal(h.saved.trials[0].response_reading, 'がっこう');
 });

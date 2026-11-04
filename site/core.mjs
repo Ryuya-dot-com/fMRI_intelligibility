@@ -1,5 +1,6 @@
-export const VERSION = 'intelligibility-2026-11-04-v3';
+export const VERSION = 'intelligibility-2026-11-04-v4';
 export const SCORE_VERSION = 'mora-levenshtein-matches-v1';
+export const READING_VERSION = 'kana-normalization-v1';
 export const CONDITIONS = ['Japanese', 'Asian', 'Romance'];
 
 export function participantId(value) {
@@ -41,16 +42,22 @@ export function makeOrder(stimuli, id, version) {
 }
 
 export function normalizeKana(value) {
-  return value.normalize('NFC').replace(/[\s。、，．,.!?！？「」『』（）()・]/gu, '');
+  return value.normalize('NFC').replace(/[\uff61-\uff9f]+/gu, s => s.normalize('NFKC'))
+    .replace(/[\u30a1-\u30f6]/gu, c => String.fromCharCode(c.charCodeAt(0) - 0x60))
+    .replace(/[\s。、，．,.!?！？「」『』（）()・]/gu, '');
 }
 
 export function validResponse(value) {
+  return typeof value === 'string' && value.length <= 2000 && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value);
+}
+
+export function validKana(value) {
   return /^[\u3041-\u3096ー]*$/u.test(normalizeKana(value));
 }
 
 export function morae(value) {
   const text = normalizeKana(value);
-  if (!validResponse(text)) throw new Error('ひらがな以外の文字が含まれています。');
+  if (!validKana(text)) throw new Error('採点用の読みをかなで指定してください。');
   const result = [];
   for (const char of text) {
     if ('ゃゅょぁぃぅぇぉゎ'.includes(char)) {
@@ -132,14 +139,17 @@ export function validateManifest(manifest) {
 }
 
 export function resultScore(stimulus, response, mode) {
-  if (mode === 'placeholder') return {score_status: 'placeholder_not_scored', score_version: SCORE_VERSION};
+  const kana = normalizeKana(response);
+  const reading = {response_reading: validKana(kana) ? kana : '', reading_status: validKana(kana) ? 'automatic_kana' : 'needs_review', reading_method: validKana(kana) ? 'kana_normalization' : '', reading_version: READING_VERSION};
+  if (mode === 'placeholder') return {...reading, score_status: 'placeholder_not_scored', score_version: SCORE_VERSION};
+  if (reading.reading_status === 'needs_review') return {...reading, score_status: 'pending_reading', score_version: SCORE_VERSION, reference_mora_count: morae(stimulus.reference_kana).length};
   try {
     const references = [stimulus.reference_kana, ...(stimulus.accepted_variants_kana || [])];
-    const candidates = references.map(reference => ({...scoreMora(reference, response), scored_reference_kana: reference}));
+    const candidates = references.map(reference => ({...scoreMora(reference, kana), scored_reference_kana: reference}));
     candidates.sort((a, b) => b.correct_mora_count - a.correct_mora_count);
-    return candidates[0];
+    return {...reading, ...candidates[0]};
   }
-  catch (error) { return {score_status: 'review_response', score_version: SCORE_VERSION, score_note: error.message}; }
+  catch (error) { return {...reading, reading_status: 'needs_review', score_status: 'review_response', score_version: SCORE_VERSION, score_note: error.message}; }
 }
 
 export function validatePractice(practice, manifest) {
@@ -155,8 +165,7 @@ export function validatePractice(practice, manifest) {
   return practice;
 }
 
-export function csv(rows) {
-  const columns = [...new Set(rows.flatMap(row => Object.keys(row)))];
+export function csv(rows, columns = [...new Set(rows.flatMap(row => Object.keys(row)))]) {
   const cell = value => {
     let text = value === undefined || value === null ? '' : String(value);
     // Protect spreadsheet users; *_json columns preserve the exact original text.

@@ -1,5 +1,6 @@
-import {VERSION, participantId, participantName, makeOrder, validateManifest, validatePractice, validResponse, resultScore, csv, exportRows} from './core.mjs';
-import {openDatabase, save, read, allRecords, clearActive, downloadCsv} from './storage.mjs';
+import {VERSION, participantId, participantName, makeOrder, validateManifest, validatePractice, validResponse, resultScore} from './core.mjs';
+import {openDatabase, save, read, clearActive, loadRecord, sessionMetadata} from './storage.mjs';
+import {downloadArchive} from './export.mjs';
 
 const $ = id => document.getElementById(id);
 const audio = new Audio();
@@ -7,7 +8,7 @@ audio.preload = 'auto';
 let db, manifest, manifestHash, practice, practiceHash, session, current, recovered;
 let events = [], seq = 0, pending = Promise.resolve(), storageFailed = false;
 let composing = false, advancing = false, checkPlayed = false;
-let releaseLock;
+let releaseLock, lastValueJson, lastValueSeq;
 const assets = new Map();
 function captureTime() {
   const perf_ms = performance.now();
@@ -25,10 +26,11 @@ function screen(id) {
 }
 
 function active() { return session?.status === 'running'; }
-function snapshot(event) {
+function snapshot(event, metadataChanged) {
   if (!session || storageFailed) return;
-  const value = structuredClone(session);
-  pending = pending.then(() => storageFailed ? undefined : save(db, value, event)).catch(error => {
+  const value = metadataChanged ? structuredClone(sessionMetadata(session)) : null;
+  const trials = current ? [structuredClone({...current, session_id: session.id})] : [];
+  pending = pending.then(() => storageFailed ? undefined : save(db, value, event, trials)).catch(error => {
     if (storageFailed) return;
     storageFailed = true;
     session.storage_error = error.message;
@@ -60,8 +62,13 @@ function log(type, details = {}, browserEvent, stamp = captureTime()) {
     audio_playback_rate: current ? audio.playbackRate : '',
     ...details,
   };
+  if (Object.hasOwn(event, 'value_json')) {
+    if (event.value_json === lastValueJson) delete event.value_json;
+    else { lastValueJson = event.value_json; lastValueSeq = event.seq; }
+    event.value_seq = lastValueSeq;
+  }
   events.push(event);
-  snapshot(event);
+  snapshot(event, ['session_started', 'trial_opened', 'trial_submitted', 'practice_completed', 'main_started', 'session_finished'].includes(type));
 }
 
 function nextEnabled() {
@@ -81,7 +88,7 @@ function inputDetails(event) {
 
 for (const type of ['keydown', 'keyup', 'beforeinput', 'input', 'compositionstart', 'compositionupdate', 'compositionend', 'select', 'paste', 'cut', 'drop', 'focus', 'blur']) {
   $('response').addEventListener(type, event => {
-    if (!active() || !current || current.audio_started_perf_ms == null) return;
+    if (!active() || !current || advancing || current.trial_status !== 'in_progress' || current.audio_started_perf_ms == null) return;
     const stamp = captureTime();
     if (type === 'compositionstart') composing = true;
     if (type === 'compositionend') composing = false;
@@ -156,6 +163,7 @@ function startTrial() {
   markTime(current, 'trial_opened', stamp);
   session.trials.push(current);
   composing = false;
+  lastValueJson = undefined; lastValueSeq = undefined;
   advancing = false;
   $('response').value = '';
   $('response').disabled = true;
@@ -172,12 +180,13 @@ function startTrial() {
 async function next() {
   if ($('next').disabled || advancing) return;
   if (!validResponse($('response').value)) {
-    $('response-error').textContent = 'ひらがなで入力してください。漢字・カタカナ・英数字が残っていないか確認してください。';
+    $('response-error').textContent = '回答は2000文字以内で入力してください。使用できない制御文字が含まれていないか確認してください。';
     log('validation_rejected');
     $('response').focus();
     return;
   }
   advancing = true;
+  $('response').disabled = true;
   nextEnabled();
   current.response = $('response').value;
   const stamp = captureTime();
@@ -186,7 +195,7 @@ async function next() {
   current.trial_status = 'completed';
   const isPractice = current.phase === 'practice';
   Object.assign(current, resultScore((isPractice ? practice : manifest).stimuli.find(s => s.id === current.stimulus_id), current.response, isPractice ? 'study' : manifest.mode));
-  log('trial_submitted', {}, undefined, stamp);
+  log('trial_submitted', {value_json: JSON.stringify(current.response)}, undefined, stamp);
   await pending;
   if (!active()) return;
   if (isPractice && current.trial_number === session.practice_order.length) {
@@ -216,7 +225,7 @@ async function finish(status) {
   audio.pause();
   $('response').disabled = true;
   $('stop-dialog').close();
-  log('session_finished', {finish_reason: status}, undefined, stamp);
+  log('session_finished', {finish_reason: status, ...(current ? {value_json: JSON.stringify(current.response)} : {})}, undefined, stamp);
   screen('finish');
   if (status !== 'completed') {
     $('finish-title').textContent = 'ここまでの入力を記録しました。';
@@ -224,9 +233,13 @@ async function finish(status) {
   }
   // Storage failures export the in-memory record without waiting on their own queue.
   if (!storageFailed) await pending;
-  downloadCsv(session, events, csv, exportRows);
+  exportRecord(session, events);
 }
-$('download').onclick = () => downloadCsv(session, events, csv, exportRows);
+function exportRecord(record, recordEvents) {
+  try { downloadArchive(record, recordEvents); return true; }
+  catch (error) { $('error').textContent = `記録を出力できませんでした。画面を閉じずに実験者にお知らせください。${error.message}`; return false; }
+}
+$('download').onclick = () => exportRecord(session, events);
 $('stop').onclick = () => { log('stop_dialog_opened'); $('stop-dialog').showModal(); nextEnabled(); };
 $('cancel-stop').onclick = () => { $('stop-dialog').close(); log('stop_cancelled'); nextEnabled(); $('response').focus(); };
 $('stop-dialog').addEventListener('close', nextEnabled);
@@ -266,7 +279,7 @@ $('begin').onclick = async () => {
   try { id = participantId($('participant').value); name = participantName($('participant-name').value); }
   catch (error) { $('error').textContent = error.message; screen('welcome'); $('begin').disabled = false; return; }
   const stamp = captureTime();
-  session = {id: crypto.randomUUID(), participant_id: id, participant_name: name, app_version: VERSION, manifest, manifest_sha256: manifestHash, practice, practice_sha256: practiceHash, practice_order: practice.stimuli.map(s => s.id), phase: 'practice', order: makeOrder(manifest.stimuli, id, manifest.version), seed: `${manifest.version}:order:${id}`, trials: [], status: 'running', started_at_utc: stamp.system_utc, user_agent: navigator.userAgent, time_origin_ms: performance.timeOrigin, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, timezone_offset_minutes: new Date(stamp.system_epoch_ms).getTimezoneOffset(), timing_version: 'dual-clock-media-v1'};
+  session = {id: crypto.randomUUID(), participant_id: id, participant_name: name, app_version: VERSION, manifest, manifest_sha256: manifestHash, practice, practice_sha256: practiceHash, practice_order: practice.stimuli.map(s => s.id), phase: 'practice', order: makeOrder(manifest.stimuli, id, manifest.version), seed: `${manifest.version}:order:${id}`, trials: [], status: 'running', started_at_utc: stamp.system_utc, user_agent: navigator.userAgent, time_origin_ms: performance.timeOrigin, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, timezone_offset_minutes: new Date(stamp.system_epoch_ms).getTimezoneOffset(), timing_version: 'dual-clock-media-v1', log_version: 'value-reference-v1'};
   markTime(session, 'started', stamp);
   log('session_started', {}, undefined, stamp);
   await pending;
@@ -287,8 +300,7 @@ $('begin-main').onclick = async () => {
 };
 
 $('recover-download').onclick = () => {
-  downloadCsv(recovered.session, recovered.events, csv, exportRows);
-  $('fresh').disabled = false;
+  if (exportRecord(recovered.session, recovered.events)) $('fresh').disabled = false;
 };
 $('fresh').onclick = async () => {
   try { await clearActive(db); screen('welcome'); }
@@ -307,15 +319,14 @@ async function init() {
   db = await openDatabase();
   const previousId = await read(db, 'state', 'active');
   if (previousId) {
-    const previous = await read(db, 'sessions', previousId);
+    const {session: previous, events: previousEvents} = await loadRecord(db, previousId);
     if (previous) {
-      const previousEvents = await allRecords(db, 'events', 'session', previousId);
       if (previous.status === 'running') {
         previous.status = 'interrupted_page_closed';
         for (const trial of previous.trials) if (trial.trial_status === 'in_progress') {
           trial.trial_status = 'interrupted'; trial.score_status = 'interrupted_not_scored';
         }
-        await save(db, previous);
+        await save(db, sessionMetadata(previous), null, previous.trials.map((trial, index) => ({session_id: previous.id, session_trial_number: index + 1, ...trial})));
       }
       recovered = {session: previous, events: previousEvents};
       screen('recovery');
