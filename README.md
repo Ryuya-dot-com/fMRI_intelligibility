@@ -10,7 +10,7 @@
 python3 -m http.server 8767 --bind 127.0.0.1 --directory site
 ```
 
-ファイルをダブルクリックする `file://` では実行できません。参加者IDと参加者名を入力し、説明・音量確認の後に練習4問を開始します。練習終了後の「本番を始める」で36問へ進みます。仮音声を用いた動作確認にはテスト用IDと「動作確認用」等の架空名を使い、実参加者と区別してください。音量確認は短い確認音です。
+ファイルをダブルクリックする `file://` では実行できません。最初の画面には参加者ID・参加者名の欄と「次へ」だけを表示します。説明・音量確認の後に練習4問を開始します。練習終了後の「本番を始める」で36問へ進みます。仮音声を用いた動作確認にはテスト用IDと「動作確認用」等の架空名を使い、実参加者と区別してください。音量確認は短い確認音です。
 
 ## 採用した仕様
 
@@ -23,7 +23,7 @@ python3 -m http.server 8767 --bind 127.0.0.1 --directory site
 
 ## 練習セッション
 
-練習は次の固定順の4文で、本番とは別の音声・文IDを使用します。Kokoroの日本語音声 `jf_alpha` で生成しています。画面には文の正答・得点を出さず、本番と同じ再生・入力・次への操作を練習します。開始前の例文表示や再生し直しは行いません。
+練習は次の固定順の4文で、本番とは別の音声・文IDを使用します。公式Pythonパッケージ `kokoro==0.9.4` の `KPipeline(lang_code='j')` と非量子化Kokoro-82M v1.0（PyTorch float32・CPU）、日本語音声 `jf_alpha` で再生成しています。24 kHz・24 bit PCM WAVで保存し、圧縮・ノイズ除去・音量正規化・無音切除は加えていません。以前の量子化ONNX版はユーザーからノイズの指摘があり、今回の音声へ差し替えました。ノイズの原因を量子化だけと断定したものではありません。画面には文の正答・得点を出さず、本番と同じ再生・入力・次への操作を練習します。開始前の例文表示や再生し直しは行いません。
 
 | 順 | 例文 | 正答の読み | モーラ数 |
 | --- | --- | --- | ---: |
@@ -69,7 +69,32 @@ CSVはUTF-8 BOM・CRLF・引用符付きで、Excel等で読めます。`row_typ
 | `trial` | 実際に開いた試行だけ。回答、再生開始・終了、提出、状態、得点・照合列 |
 | `event` | 1操作・イベントにつき1行。連番、時刻、キー、IME、文字列、選択範囲等 |
 
-主な時刻列は `event_perf_ms`、`audio_started_perf_ms`、`audio_ended_perf_ms`、`submitted_perf_ms`（同じページの `performance.now()` によるms）。`relative_to_audio_ms` と `response_time_ms` は再生開始検出からの経過時間です。ブラウザーイベントの元タイムスタンプも保存します。ブラウザーが通知した時刻であり、耳元での音声開始や物理キー押下の実測ではありません。タブを隠す等によるイベント遅延を精密な聴取時間として解釈しないでください。
+### 時刻と音響分析への対応
+
+各キーストローク・IME・編集イベントと音声開始・終了に、次を記録します。ms値は整数や小数をそのままCSVへ出力し、秒への丸めは行いません。
+
+| 列 | 意味 |
+| --- | --- |
+| `event_system_epoch_ms` | コールバック処理時に取得した `Date.now()`。Unix epochからのシステム時刻、整数ms |
+| `event_system_utc` | 同じシステム時刻を `YYYY-MM-DDTHH:mm:ss.sssZ` で表現（UTC） |
+| `event_perf_ms` | 同時に取得した `performance.now()`。ページ内での高分解能の経過時間 |
+| `event_monotonic_epoch_ms` | `performance.timeOrigin + event_perf_ms`。ページ起動を原点とする時計をepoch表現に換算 |
+| `system_minus_monotonic_ms` | システム時計と上記換算時計の差。時刻補正・時計のずれの点検用 |
+| `browser_event_timestamp_ms` | ブラウザーがイベントに付けた元の `Event.timeStamp`。コールバックの呼出時刻とは別に保存 |
+| `browser_event_monotonic_epoch_ms` | 有効な元イベント時刻に `performance.timeOrigin` を加えた値 |
+| `browser_event_to_callback_ms` | 元イベント時刻からログ取得までの遅延。キュー待ちの点検用 |
+| `browser_event_system_epoch_ms_estimate` | システム時計から上記遅延を引いた推定イベント時刻。遅延中に時計補正がある場合は使わない |
+| `relative_to_audio_ms` | ログ取得時刻から最初の `playing` コールバックの検出時刻を引いた値 |
+| `browser_event_relative_to_audio_ms` | 元イベント時刻から上記音声開始検出時刻を引いた値 |
+| `audio_position_s` / `audio_position_ms` | ログ取得時の `HTMLMediaElement.currentTime`。WAV内の再生位置で、再生終了後は終端で止まる |
+| `audio_paused` / `audio_ended` / `audio_playback_rate` | そのイベント時の再生状態・速度 |
+
+試行行には `play_requested_*`・`audio_started_*`・`audio_ended_*`・`first_input_*`・`last_input_*`・`submitted_*`・`interrupted_*` を保存します。各 `*` は `perf_ms`・`system_epoch_ms`・`system_utc`・`monotonic_epoch_ms`。発生していない時点は空欄です。音声開始／終了イベント行と試行行には同じ時計サンプルを使います。開始時の元イベント時刻と `audio_position_at_start_callback_s`、WAVのファイル名・SHA-256・サンプルレート・フレーム数も保存します。セッション行には時刻原点、端末のタイムゾーン、UTCからのオフセットと時刻仕様版を残します。旧CSVにシステム時計がない場合、現在の時計から過去の時刻を補いません。
+
+**ミリ秒単位で保存することと、耳元の音声・物理的なキー押下を1 ms精度で測定することは異なります。** `Date.now()` はPC時計の補正で動き得るため、経過時間は `performance.now()` で計算します。元イベント時刻もブラウザーによる時刻で、OS・入力装置の遅延は含み得ます。`currentTime` の分解能・`playing` 通知の遅延・音声デバイスの出力遅延を実測していません。WAV内の音響特徴との照合には再生位置とハッシュを使えますが、これを耳元のサンプル単位の同期精度として扱いません。別装置の録音と厳密に同期する場合は、同一の出力信号を録音する等の校正で、実施PC・ヘッドホンでの開始遅延と変動、装置間の時計差を確認する必要があります。
+
+時計仕様の参照：[Event.timeStamp](https://developer.mozilla.org/en-US/docs/Web/API/Event/timeStamp)、[performance.timeOrigin](https://developer.mozilla.org/en-US/docs/Web/API/Performance/timeOrigin)、[HTMLMediaElement.currentTime](https://developer.mozilla.org/en-US/docs/Web/API/HTMLMediaElement/currentTime)。
+
 
 `participant_name_json`・`key_json`・`input_data_json`・`value_json`・`response_json` はJSON文字列です。CSV数式として実行され得る先頭文字は通常列にアポストロフィを付け、元の文字列はJSON列に保持します。解析時にこれらをJSONデコードすれば入力内容を復元できます。
 
@@ -100,3 +125,13 @@ node --test tests/*.test.mjs
 ローカルの実施検証と範囲は `verification.json`、公開環境でのテスト・配信結果はGitHub Actionsに記録します。仮音声での動作確認と、本番刺激・実施用PCでの確認を区別します。
 
 参加者名は必須（前後空白を除去、100文字以内）で、端末のIndexedDBとCSVに保存します。ファイル名や音声取得URLへ氏名を含めません。旧記録の氏名は空欄のままとし、現在の入力から補いません。研究室PCではCSV回収後もブラウザー内に氏名を含む記録が残るため、施設の研究データ管理手順に従って扱ってください。
+
+## 練習音声の再生成
+
+[公式モデル](https://huggingface.co/hexgrad/Kokoro-82M) の `config.json`・`kokoro-v1_0.pth`・`voices/jf_alpha.pt` を、同じモデル用フォルダにファイル名を保って置きます（`jf_alpha.pt` もその直下）。音声生成用の独立したPython環境へ `tools/requirements.txt` をインストールし、次のように実行します。スクリプトは公式v1.0モデルのSHA-256を確認し、既存の出力フォルダへ上書きしません。
+
+```sh
+python tools/generate_practice.py --model-dir /path/to/kokoro82m --output /path/to/new-practice
+```
+
+出力の `audio/`・`practice.json` と検査記録を確認してから、サイトの対応ファイルを差し替えます。生成元は現行 `site/practice.json` の4文です。確認済み事項は有限サンプル・クリッピングなし・読み20モーラ・ハッシュの一致で、聴感上の無雑音や意図した発音すべての保証とは区別します。

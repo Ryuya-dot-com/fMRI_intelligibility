@@ -1,0 +1,89 @@
+{
+  "interpretation": "Signal levels only; head/tail windows are not manually labelled silence, so these are not SNR or a perceptual noise score.",
+  "files": [
+    {
+      "file": "practice_01.wav",
+      "previous_onnx_int8": {
+        "duration_s": 2.612,
+        "peak": 0.31854248046875,
+        "rms_dbfs": -22.12014977133319,
+        "head_50ms_dbfs": -45.85418059462335,
+        "tail_50ms_dbfs": -84.07047811233375,
+        "clipped_samples": 0,
+        "format": "PCM_16"
+      },
+      "python_fp32": {
+        "duration_s": 3.325,
+        "peak": 0.36244380474090576,
+        "rms_dbfs": -23.747973067793637,
+        "head_50ms_dbfs": -142.1475381754957,
+        "tail_50ms_dbfs": -145.9818144315202,
+        "clipped_samples": 0,
+        "format": "PCM_24"
+      }
+    },
+    {
+      "file": "practice_02.wav",
+      "previous_onnx_int8": {
+        "duration_s": 2.8792916666666666,
+        "peak": 0.313446044921875,
+        "rms_dbfs": -22.123094036580472,
+        "head_50ms_dbfs": -53.00566516435157,
+        "tail_50ms_dbfs": -81.55742107364601,
+        "clipped_samples": 0,
+        "format": "PCM_16"
+      },
+      "python_fp32": {
+        "duration_s": 3.525,
+        "peak": 0.4116635322570801,
+        "rms_dbfs": -23.868737444686353,
+        "head_50ms_dbfs": -142.88071789636123,
+        "tail_50ms_dbfs": -146.3652643522824,
+        "clipped_samples": 0,
+        "format": "PCM_24"
+      }
+    },
+    {
+      "file": "practice_03.wav",
+      "previous_onnx_int8": {
+        "duration_s": 2.792666666666667,
+        "peak": 0.340118408203125,
+        "rms_dbfs": -22.099753308836775,
+        "head_50ms_dbfs": -31.45390711485514,
+        "tail_50ms_dbfs": -85.69376332656299,
+        "clipped_samples": 0,
+        "format": "PCM_16"
+      },
+      "python_fp32": {
+        "duration_s": 3.5,
+        "peak": 0.40568387508392334,
+        "rms_dbfs": -23.49223848882616,
+        "head_50ms_dbfs": -143.08512949878667,
+        "tail_50ms_dbfs": -146.10590701133842,
+        "clipped_samples": 0,
+        "format": "PCM_24"
+      }
+    },
+    {
+      "file": "practice_04.wav",
+      "previous_onnx_int8": {
+        "duration_s": 2.933333333333333,
+        "peak": 0.32916259765625,
+        "rms_dbfs": -22.25160146934353,
+        "head_50ms_dbfs": -30.06569463907985,
+        "tail_50ms_dbfs": -80.32713210682903,
+        "clipped_samples": 0,
+        "format": "PCM_16"
+      },
+      "python_fp32": {
+        "duration_s": 3.65,
+        "peak": 0.3427532911300659,
+        "rms_dbfs": -23.938872899363005,
+        "head_50ms_dbfs": -143.32168496215334,
+        "tail_50ms_dbfs": -147.06452958550705,
+        "clipped_samples": 0,
+        "format": "PCM_24"
+      }
+    }
+  ]
+}

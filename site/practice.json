@@ -1,5 +1,5 @@
 {
-  "version": "practice-ja-20mora-v1",
+  "version": "practice-ja-20mora-kokoro82m-fp32-v2",
   "stimuli": [
     {
       "id": "practice_01",
@@ -31,11 +31,13 @@
         "す"
       ],
       "audio": "audio/practice_01.wav",
-      "sha256": "13538df6bd193e5c545b0a358283da35f9ea5c444231ff2489bd53fb897c3296",
+      "sha256": "60a3ff9a0910532015593507833642473437592aacb2d133d2a362ead6ba8775",
       "kokoro_voice": "jf_alpha",
       "sample_rate": 24000,
-      "frames": 62688,
-      "duration_s": 2.612
+      "frames": 79800,
+      "duration_s": 3.325,
+      "sample_format": "PCM_24",
+      "generator": "kokoro-0.9.4-pytorch-float32"
     },
     {
       "id": "practice_02",
@@ -67,11 +69,13 @@
         "た"
       ],
       "audio": "audio/practice_02.wav",
-      "sha256": "a56bae99d8920e5c71640741ab376627c27ff39f485fa1726b114106bea8a03e",
+      "sha256": "dfd6754e5c48cea0de81a07705b4bfe19f89577766ba2fd6741bb0199c097376",
       "kokoro_voice": "jf_alpha",
       "sample_rate": 24000,
-      "frames": 69103,
-      "duration_s": 2.8792916666666666
+      "frames": 84600,
+      "duration_s": 3.525,
+      "sample_format": "PCM_24",
+      "generator": "kokoro-0.9.4-pytorch-float32"
     },
     {
       "id": "practice_03",
@@ -103,11 +107,13 @@
         "す"
       ],
       "audio": "audio/practice_03.wav",
-      "sha256": "be8b74a9c2fce02d52003f6db0819665eaa7f20c96ecbcfef3e3857dd9b5c6bf",
+      "sha256": "6c1d8a38db6a85d8177b557e25786716dfa2812740b17b1cd22a1ddcc629e2aa",
       "kokoro_voice": "jf_alpha",
       "sample_rate": 24000,
-      "frames": 67024,
-      "duration_s": 2.792666666666667
+      "frames": 84000,
+      "duration_s": 3.5,
+      "sample_format": "PCM_24",
+      "generator": "kokoro-0.9.4-pytorch-float32"
     },
     {
       "id": "practice_04",
@@ -139,11 +145,13 @@
         "た"
       ],
       "audio": "audio/practice_04.wav",
-      "sha256": "02b3d36ad65fb147a57bc09d66bebc6415f2e098a64b1dc076e0f5792cdf6a87",
+      "sha256": "923c46d828eaf88352f0986b72f5e1363690f36d03ef355684e086e27e30d80b",
       "kokoro_voice": "jf_alpha",
       "sample_rate": 24000,
-      "frames": 70400,
-      "duration_s": 2.933333333333333
+      "frames": 87600,
+      "duration_s": 3.65,
+      "sample_format": "PCM_24",
+      "generator": "kokoro-0.9.4-pytorch-float32"
     }
   ]
 }

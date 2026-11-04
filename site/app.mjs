@@ -9,12 +9,18 @@ let events = [], seq = 0, pending = Promise.resolve(), storageFailed = false;
 let composing = false, advancing = false, checkPlayed = false;
 let releaseLock;
 const assets = new Map();
-const now = () => performance.now();
+function captureTime() {
+  const perf_ms = performance.now();
+  const system_epoch_ms = Date.now();
+  return {perf_ms, system_epoch_ms, system_utc: new Date(system_epoch_ms).toISOString(), monotonic_epoch_ms: performance.timeOrigin + perf_ms};
+}
+function markTime(record, prefix, stamp) {
+  for (const [key, value] of Object.entries(stamp)) record[`${prefix}_${key}`] = value;
+}
 const hash = async bytes => [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(b => b.toString(16).padStart(2, '0')).join('');
 
-function screen(id, stage) {
+function screen(id) {
   for (const section of document.querySelectorAll('section.panel')) section.hidden = section.id !== id;
-  $('stage').textContent = stage;
   window.scrollTo(0, 0);
 }
 
@@ -31,15 +37,27 @@ function snapshot(event) {
   });
 }
 
-function log(type, details = {}, browserEvent) {
+function log(type, details = {}, browserEvent, stamp = captureTime()) {
   if (!session) return;
-  const time = now();
+  const time = stamp.perf_ms;
+  const browserTime = browserEvent?.timeStamp;
+  const validBrowserTime = Number.isFinite(browserTime) && browserTime >= 0 && browserTime <= time;
   const event = {
     session_id: session.id, seq: ++seq, event_type: type,
-    event_perf_ms: time, browser_event_timestamp_ms: browserEvent?.timeStamp ?? '',
+    event_perf_ms: time, event_system_epoch_ms: stamp.system_epoch_ms, event_system_utc: stamp.system_utc,
+    event_monotonic_epoch_ms: stamp.monotonic_epoch_ms,
+    system_minus_monotonic_ms: stamp.system_epoch_ms - stamp.monotonic_epoch_ms,
+    browser_event_timestamp_ms: browserTime ?? '',
+    browser_event_monotonic_epoch_ms: validBrowserTime ? performance.timeOrigin + browserTime : '',
+    browser_event_system_epoch_ms_estimate: validBrowserTime ? stamp.system_epoch_ms + browserTime - time : '',
+    browser_event_to_callback_ms: validBrowserTime ? time - browserTime : '',
     phase: current?.phase ?? session.phase ?? '', trial_number: current?.trial_number ?? '', session_trial_number: current?.session_trial_number ?? '', stimulus_id: current?.stimulus_id ?? '',
     relative_to_audio_ms: current?.audio_started_perf_ms != null ? time - current.audio_started_perf_ms : '',
+    browser_event_relative_to_audio_ms: validBrowserTime && current?.audio_started_perf_ms != null ? browserTime - current.audio_started_perf_ms : '',
     audio_position_s: current ? audio.currentTime : '',
+    audio_position_ms: current ? audio.currentTime * 1000 : '',
+    audio_paused: current ? audio.paused : '', audio_ended: current ? audio.ended : '',
+    audio_playback_rate: current ? audio.playbackRate : '',
     ...details,
   };
   events.push(event);
@@ -64,15 +82,16 @@ function inputDetails(event) {
 for (const type of ['keydown', 'keyup', 'beforeinput', 'input', 'compositionstart', 'compositionupdate', 'compositionend', 'select', 'paste', 'cut', 'drop', 'focus', 'blur']) {
   $('response').addEventListener(type, event => {
     if (!active() || !current || current.audio_started_perf_ms == null) return;
+    const stamp = captureTime();
     if (type === 'compositionstart') composing = true;
     if (type === 'compositionend') composing = false;
     current.response = $('response').value;
     if (type === 'input') {
-      current.first_input_perf_ms ??= now();
-      current.last_input_perf_ms = now();
+      if (current.first_input_perf_ms == null) markTime(current, 'first_input', stamp);
+      markTime(current, 'last_input', stamp);
       $('response-error').textContent = '';
     }
-    log(type, inputDetails(event), event);
+    log(type, inputDetails(event), event, stamp);
     nextEnabled();
   });
 }
@@ -80,21 +99,25 @@ for (const type of ['keydown', 'keyup', 'beforeinput', 'input', 'compositionstar
 audio.addEventListener('playing', event => {
   if (!active() || !current) return;
   if (current.audio_started_perf_ms == null) {
-    current.audio_started_perf_ms = now();
+    const stamp = captureTime();
+    markTime(current, 'audio_started', stamp);
+    current.audio_started_browser_event_timestamp_ms = event.timeStamp;
+    current.audio_position_at_start_callback_s = audio.currentTime;
     current.audio_duration_s = audio.duration;
     current.audio_timing_source = 'HTMLMediaElement_playing_callback_performance_now';
+    log('audio_started', {}, event, stamp);
     $('response').disabled = false;
     $('response').focus();
     $('audio-status').textContent = '音声を聞きながら入力できます。';
-    log('audio_started', {}, event);
   } else log('audio_playing_again', {}, event);
 });
 audio.addEventListener('ended', event => {
   if (!active() || !current) return;
-  current.audio_ended_perf_ms = now();
+  const stamp = captureTime();
+  markTime(current, 'audio_ended', stamp);
   current.audio_completed = true;
   $('audio-status').textContent = '入力が終わったら、次へ進んでください。';
-  log('audio_ended', {}, event);
+  log('audio_ended', {}, event, stamp);
   nextEnabled();
 });
 for (const type of ['waiting', 'stalled', 'pause', 'ratechange', 'volumechange', 'seeking']) {
@@ -109,8 +132,9 @@ audio.addEventListener('error', () => {
 
 function playCurrent() {
   $('retry-play').hidden = true;
-  current.play_requested_perf_ms = now();
-  log('play_requested');
+  const stamp = captureTime();
+  markTime(current, 'play_requested', stamp);
+  log('play_requested', {}, undefined, stamp);
   audio.play().catch(error => {
     if (!active()) return;
     log('play_rejected', {error_name: error.name, error_message: error.message});
@@ -127,21 +151,21 @@ function startTrial() {
   const order = isPractice ? session.practice_order : session.order;
   const index = session.trials.filter(t => t.phase === session.phase).length;
   const s = (isPractice ? practice : manifest).stimuli.find(s => s.id === order[index]);
-  current = {phase: session.phase, session_trial_number: session.trials.length + 1, trial_number: index + 1, stimulus_id: s.id, sentence_id: s.sentence_id, speaker_id: s.speaker_id, condition: s.condition, audio_file: s.audio, audio_sha256: s.sha256, reference_kana: s.reference_kana || '', trial_status: 'in_progress', response: '', audio_completed: false, trial_opened_perf_ms: now()};
+  const stamp = captureTime();
+  current = {phase: session.phase, session_trial_number: session.trials.length + 1, trial_number: index + 1, stimulus_id: s.id, sentence_id: s.sentence_id, speaker_id: s.speaker_id, condition: s.condition, audio_file: s.audio, audio_sha256: s.sha256, audio_sample_rate_hz: s.sample_rate || '', audio_frames: s.frames || '', reference_kana: s.reference_kana || '', trial_status: 'in_progress', response: '', audio_completed: false};
+  markTime(current, 'trial_opened', stamp);
   session.trials.push(current);
   composing = false;
   advancing = false;
   $('response').value = '';
   $('response').disabled = true;
   $('next').disabled = true;
-  $('next').textContent = index === order.length - 1 ? (isPractice ? '練習を終える' : '回答を終える') : '次へ →';
+  $('next').textContent = index === order.length - 1 ? (isPractice ? '練習を終える' : '回答を終える') : '次へ';
   $('response-error').textContent = '';
   $('audio-status').textContent = '音声を準備しています…';
   $('progress-text').textContent = `${isPractice ? '練習 ' : ''}${index + 1} / ${order.length}`;
-  $('progress').max = order.length;
-  $('progress').value = index;
   audio.src = assets.get(s.id);
-  log('trial_opened');
+  log('trial_opened', {}, undefined, stamp);
   playCurrent();
 }
 
@@ -156,12 +180,13 @@ async function next() {
   advancing = true;
   nextEnabled();
   current.response = $('response').value;
-  current.submitted_perf_ms = now();
+  const stamp = captureTime();
+  markTime(current, 'submitted', stamp);
   current.response_time_ms = current.submitted_perf_ms - current.audio_started_perf_ms;
   current.trial_status = 'completed';
   const isPractice = current.phase === 'practice';
   Object.assign(current, resultScore((isPractice ? practice : manifest).stimuli.find(s => s.id === current.stimulus_id), current.response, isPractice ? 'study' : manifest.mode));
-  log('trial_submitted');
+  log('trial_submitted', {}, undefined, stamp);
   await pending;
   if (!active()) return;
   if (isPractice && current.trial_number === session.practice_order.length) {
@@ -169,7 +194,7 @@ async function next() {
     current = null;
     log('practice_completed');
     await pending;
-    if (active()) screen('practice-done', '練習終了');
+    if (active()) screen('practice-done');
   } else if (!isPractice && current.trial_number === session.order.length) await finish('completed');
   else startTrial();
 }
@@ -177,20 +202,22 @@ $('next').onclick = next;
 
 async function finish(status) {
   if (!active()) return;
+  const stamp = captureTime();
   session.status = status;
-  session.completed_at_utc = new Date().toISOString();
+  session.completed_at_utc = stamp.system_utc;
+  markTime(session, 'completed', stamp);
   if (current?.trial_status === 'in_progress') {
     current.response = $('response').value;
     current.trial_status = 'interrupted';
-    current.interrupted_perf_ms = now();
+    markTime(current, 'interrupted', stamp);
     current.audio_position_at_interruption_s = audio.currentTime;
     current.score_status = 'interrupted_not_scored';
   }
   audio.pause();
   $('response').disabled = true;
   $('stop-dialog').close();
-  log('session_finished', {finish_reason: status});
-  screen('finish', '終了');
+  log('session_finished', {finish_reason: status}, undefined, stamp);
+  screen('finish');
   if (status !== 'completed') {
     $('finish-title').textContent = 'ここまでの入力を記録しました。';
     $('finish-message').textContent = '実験者にお知らせください。画面はそのままにしてください。';
@@ -216,7 +243,7 @@ window.addEventListener('beforeunload', event => {
 
 $('setup').onsubmit = event => {
   event.preventDefault();
-  try { participantId($('participant').value); participantName($('participant-name').value); $('error').textContent = ''; screen('instructions', '説明'); }
+  try { participantId($('participant').value); participantName($('participant-name').value); $('error').textContent = ''; screen('instructions'); }
   catch (error) { $('error').textContent = error.message; }
 };
 $('check-sound').onclick = () => {
@@ -237,12 +264,14 @@ $('begin').onclick = async () => {
   $('begin').disabled = true;
   let id, name;
   try { id = participantId($('participant').value); name = participantName($('participant-name').value); }
-  catch (error) { $('error').textContent = error.message; screen('welcome', '準備'); $('begin').disabled = false; return; }
-  session = {id: crypto.randomUUID(), participant_id: id, participant_name: name, app_version: VERSION, manifest, manifest_sha256: manifestHash, practice, practice_sha256: practiceHash, practice_order: practice.stimuli.map(s => s.id), phase: 'practice', order: makeOrder(manifest.stimuli, id, manifest.version), seed: `${manifest.version}:order:${id}`, trials: [], status: 'running', started_at_utc: new Date().toISOString(), user_agent: navigator.userAgent, time_origin_ms: performance.timeOrigin};
-  log('session_started');
+  catch (error) { $('error').textContent = error.message; screen('welcome'); $('begin').disabled = false; return; }
+  const stamp = captureTime();
+  session = {id: crypto.randomUUID(), participant_id: id, participant_name: name, app_version: VERSION, manifest, manifest_sha256: manifestHash, practice, practice_sha256: practiceHash, practice_order: practice.stimuli.map(s => s.id), phase: 'practice', order: makeOrder(manifest.stimuli, id, manifest.version), seed: `${manifest.version}:order:${id}`, trials: [], status: 'running', started_at_utc: stamp.system_utc, user_agent: navigator.userAgent, time_origin_ms: performance.timeOrigin, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, timezone_offset_minutes: new Date(stamp.system_epoch_ms).getTimezoneOffset(), timing_version: 'dual-clock-media-v1'};
+  markTime(session, 'started', stamp);
+  log('session_started', {}, undefined, stamp);
   await pending;
   if (!active()) return;
-  screen('task', '練習');
+  screen('task');
   startTrial();
 };
 
@@ -253,7 +282,7 @@ $('begin-main').onclick = async () => {
   log('main_started');
   await pending;
   if (!active()) return;
-  screen('task', '本番');
+  screen('task');
   startTrial();
 };
 
@@ -262,7 +291,7 @@ $('recover-download').onclick = () => {
   $('fresh').disabled = false;
 };
 $('fresh').onclick = async () => {
-  try { await clearActive(db); screen('welcome', '準備'); }
+  try { await clearActive(db); screen('welcome'); }
   catch { $('error').textContent = '記録の準備ができません。実験者にお知らせください。'; }
 };
 
@@ -289,7 +318,7 @@ async function init() {
         await save(db, previous);
       }
       recovered = {session: previous, events: previousEvents};
-      screen('recovery', '記録の確認');
+      screen('recovery');
     }
   }
   const response = await fetch('./stimuli.json', {cache: 'no-cache'});
@@ -317,7 +346,8 @@ async function init() {
       $('loading').textContent = `音声を準備しています… ${++loaded} / ${totalAudio}`;
     }
   }));
-  $('loading').textContent = '準備ができました。';
+  $('loading').textContent = '';
+  $('loading').hidden = true;
   $('setup-next').disabled = false;
 }
 init().catch(error => { $('error').textContent = `準備を完了できませんでした。実験者にお知らせください。\n${error.message}`; });

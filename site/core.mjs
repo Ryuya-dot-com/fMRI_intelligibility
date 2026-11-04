@@ -1,4 +1,4 @@
-export const VERSION = 'intelligibility-2026-11-04-v2';
+export const VERSION = 'intelligibility-2026-11-04-v3';
 export const SCORE_VERSION = 'mora-levenshtein-matches-v1';
 export const CONDITIONS = ['Japanese', 'Asian', 'Romance'];
 
@@ -168,7 +168,7 @@ export function csv(rows) {
 
 export function exportRows(session, events) {
   const common = {session_id: session.id, participant_id: session.participant_id, participant_name: session.participant_name || '', participant_name_json: JSON.stringify(session.participant_name || ''), app_version: session.app_version, manifest_version: session.manifest.version, manifest_sha256: session.manifest_sha256, practice_version: session.practice?.version || '', practice_sha256: session.practice_sha256 || '', mode: session.manifest.mode, session_status: session.status};
-  const rows = [{...common, row_type: 'session', started_at_utc: session.started_at_utc, completed_at_utc: session.completed_at_utc, user_agent: session.user_agent, time_origin_ms: session.time_origin_ms, seed: session.seed, storage_error: session.storage_error || '', scoring_policy: SCORE_VERSION, manifest_json: JSON.stringify(session.manifest), practice_json: session.practice ? JSON.stringify(session.practice) : ''}];
+  const rows = [{...common, row_type: 'session', started_at_utc: session.started_at_utc, completed_at_utc: session.completed_at_utc, user_agent: session.user_agent, time_origin_ms: session.time_origin_ms, timezone: session.timezone || '', timezone_offset_minutes: session.timezone_offset_minutes ?? '', timing_version: session.timing_version || '', started_system_epoch_ms: session.started_system_epoch_ms ?? '', started_monotonic_epoch_ms: session.started_monotonic_epoch_ms ?? '', completed_system_epoch_ms: session.completed_system_epoch_ms ?? '', completed_monotonic_epoch_ms: session.completed_monotonic_epoch_ms ?? '', seed: session.seed, storage_error: session.storage_error || '', scoring_policy: SCORE_VERSION, manifest_json: JSON.stringify(session.manifest), practice_json: session.practice ? JSON.stringify(session.practice) : ''}];
   const practiceCount = session.practice_order?.length || 0;
   (session.practice_order || []).forEach((id, index) => {
     const s = session.practice.stimuli.find(s => s.id === id);

@@ -1,9 +1,21 @@
 {
-  "model_sha256": "ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c",
-  "voices_sha256": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d",
+  "model": "hexgrad/Kokoro-82M v1.0",
+  "runtime": "Official Python kokoro KPipeline / PyTorch CPU float32",
+  "model_url": "https://huggingface.co/hexgrad/Kokoro-82M",
+  "model_sha256": "496dba118d1a58f5f3db2efc88dbdc216e0483fc89fe6e47ee1f2c53f18ad1e4",
+  "voice_sha256": "1bf4c9dc69e45ee46183b071f4db766349aac5592acbcfeaf051018048a5d787",
+  "config_sha256": "5abb01e2403b072bf03d04fde160443e209d7a0dad49a423be15196b9b43c17f",
+  "parameter_count": 81810022,
+  "sample_rate_hz": 24000,
+  "sample_format": "PCM_24",
+  "processing": "No quantization, compression, denoising, amplitude normalization or silence trimming",
   "packages": {
-    "kokoro-onnx": "0.6.1",
+    "kokoro": "0.9.4",
+    "torch": "2.15.0",
+    "transformers": "5.22.1",
     "misaki": "0.9.4",
+    "soundfile": "0.14.0",
+    "numpy": "2.5.4",
     "unidic-lite": "1.0.8",
     "pyopenjtalk": "0.4.1"
   },
@@ -14,7 +26,14 @@
       "mora_count_manual": 20,
       "mora_count_openjtalk": 20,
       "openjtalk_reading": "アシ’タワトモダチ’トコーエンマデアルキマス’",
-      "kokoro_phonemes": "asɨ βa tomodaʨi to koːeɴ made aɾɯkʲimasɨ."
+      "kokoro_phonemes": "asɨ βa tomodaʨi to koːeɴ made aɾɯkʲimasɨ.",
+      "seed": 20261105,
+      "samples_finite": true,
+      "peak": 0.3624437749385834,
+      "rms": 0.06495331972837448,
+      "clipped_samples": 0,
+      "first_sample": -1.223562549057533e-06,
+      "last_sample": -8.709108811899569e-08
     },
     {
       "id": "practice_02",
@@ -22,7 +41,14 @@
       "mora_count_manual": 20,
       "mora_count_openjtalk": 20,
       "openjtalk_reading": "ツ’クエノウエニキレイナハナヲカザリマシ’タ",
-      "kokoro_phonemes": "ʦɨkɯe no ɯe ɲi kʲiɾeː na hana o kaʣaɾʲi maɕita."
+      "kokoro_phonemes": "ʦɨkɯe no ɯe ɲi kʲiɾeː na hana o kaʣaɾʲi maɕita.",
+      "seed": 20261106,
+      "samples_finite": true,
+      "peak": 0.4116634726524353,
+      "rms": 0.06405648589134216,
+      "clipped_samples": 0,
+      "first_sample": -9.537880032439716e-07,
+      "last_sample": -7.25331119610928e-08
     },
     {
       "id": "practice_03",
@@ -30,7 +56,14 @@
       "mora_count_manual": 20,
       "mora_count_openjtalk": 20,
       "openjtalk_reading": "エキノチカクデオイシイパンヲカッテキマス’",
-      "kokoro_phonemes": "ekʲi no ʨikakɯ de oiɕiː paɴ o kaʔte kʲimasɨ."
+      "kokoro_phonemes": "ekʲi no ʨikakɯ de oiɕiː paɴ o kaʔte kʲimasɨ.",
+      "seed": 20261107,
+      "samples_finite": true,
+      "peak": 0.4056839048862457,
+      "rms": 0.06689413636922836,
+      "clipped_samples": 0,
+      "first_sample": -9.58106511461665e-07,
+      "last_sample": -9.585698990122182e-08
     },
     {
       "id": "practice_04",
@@ -38,7 +71,14 @@
       "mora_count_manual": 20,
       "mora_count_openjtalk": 20,
       "openjtalk_reading": "オトートワヘヤデシズカニホンヲヨンデイタ",
-      "kokoro_phonemes": "otoːto βa heja de ɕizɨka ɲi hoɴ o jonde ita."
+      "kokoro_phonemes": "otoːto βa heja de ɕizɨka ɲi hoɴ o jonde ita.",
+      "seed": 20261108,
+      "samples_finite": true,
+      "peak": 0.34275326132774353,
+      "rms": 0.06354133784770966,
+      "clipped_samples": 0,
+      "first_sample": -6.46764249268017e-07,
+      "last_sample": -7.41110071089679e-08
     }
   ]
 }

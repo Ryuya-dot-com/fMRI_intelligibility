@@ -8,6 +8,8 @@ import * as core from '../site/core.mjs';
 
 const source = readFileSync(new URL('../site/app.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '');
 const manifestText = readFileSync(new URL('../site/stimuli.json', import.meta.url), 'utf8');
+const html = readFileSync(new URL('../site/index.html', import.meta.url), 'utf8');
+const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]));
 const tick = async () => { for (let i = 0; i < 12; i++) await new Promise(setImmediate); };
 
 async function harness(options = {}) {
@@ -20,20 +22,21 @@ async function harness(options = {}) {
     showModal() { this.open = true; }
     close() { this.open = false; this.emit('close'); }
   }
-  const el = id => { if (!elements.has(id)) elements.set(id, new Element(id)); return elements.get(id); };
+  const el = id => { assert.ok(ids.has(id), `Element #${id} exists in the real HTML`); if (!elements.has(id)) elements.set(id, new Element(id)); return elements.get(id); };
   const panels = ['welcome', 'instructions', 'task', 'practice-done', 'finish', 'recovery'].map(el);
-  let media, time = 0, saved, failSave = false, failedOnce = false, lateWrites = 0;
+  let media, time = 0, wallOffset = 500, saved, failSave = false, failedOnce = false, lateWrites = 0;
+  class SystemDate extends Date { static now() { return Math.floor(1000000 + time + wallOffset); } }
   const savedEvents = [], downloads = [];
   class Audio extends Element {
-    constructor() { super('audio'); media = this; this.currentTime = 0; this.duration = 2; this.plays = 0; }
-    play() { this.plays++; if (options.blockPlay && this.plays === 1) return Promise.reject(Object.assign(new Error('blocked'), {name: 'NotAllowedError'})); this.emit('playing'); return Promise.resolve(); }
-    pause() { this.emit('pause'); }
-    end() { this.currentTime = this.duration; this.emit('ended'); }
+    constructor() { super('audio'); media = this; this.currentTime = 0; this.duration = 2; this.plays = 0; this.paused = true; this.ended = false; this.playbackRate = 1; }
+    play() { this.plays++; if (options.blockPlay && this.plays === 1) return Promise.reject(Object.assign(new Error('blocked'), {name: 'NotAllowedError'})); this.paused = false; this.ended = false; this.emit('playing'); return Promise.resolve(); }
+    pause() { this.paused = true; this.emit('pause'); }
+    end() { this.currentTime = this.duration; this.ended = true; this.paused = true; this.emit('ended'); }
   }
   const document = {getElementById: el, querySelectorAll: () => panels, addEventListener() {}, visibilityState: 'visible'};
   const context = {...core, document, Audio, window: {scrollTo() {}, addEventListener() {}},
     navigator: {userAgent: 'simulated-browser', locks: {request: (name, opts, fn) => { fn({}); return Promise.resolve(); }}},
-    performance: {now: () => ++time, timeOrigin: 1000000}, crypto: webcrypto,
+    performance: {now: () => time += 0.25, timeOrigin: 1000000}, Date: SystemDate, crypto: webcrypto,
     URL: {createObjectURL: () => 'blob:fixture'}, Blob, TextDecoder, structuredClone,
     fetch: async path => {
       const bytes = path === './stimuli.json' ? Buffer.from(manifestText) : readFileSync(new URL(`../site/${path}`, import.meta.url));
@@ -54,6 +57,7 @@ async function harness(options = {}) {
   assert.equal(el('error').textContent, undefined);
   assert.equal(el('setup-next').disabled, false);
   return {el, media, downloads, savedEvents, get saved() { return saved; }, get lateWrites() { return lateWrites; }, fail: () => { failSave = true; },
+    get time() { return time; }, setWallOffset: value => { wallOffset = value; },
     start: async (name = '動作確認用') => { el('participant').value = '900002'; el('participant-name').value = name; el('begin').disabled = false; await el('begin').onclick(); await tick(); },
   };
 }
@@ -108,6 +112,47 @@ test('4 practice + 36 main trials: gates, phase transition, identity and CSV sep
   assert.equal(session.trials[4].trial_number, 1);
   assert.equal(session.trials[4].session_trial_number, 5);
   assert.ok(events.filter(e => e.event_type === 'input').every(e => e.phase === (e.session_trial_number <= 4 ? 'practice' : 'main')));
+});
+
+test('system milliseconds, monotonic clocks, browser queue delay and audio positions survive CSV export', async () => {
+  const h = await harness(); await h.start();
+  const onset = h.savedEvents.find(e => e.event_type === 'audio_started');
+  const trial = h.saved.trials[0];
+  assert.equal(onset.event_system_epoch_ms, trial.audio_started_system_epoch_ms);
+  assert.equal(onset.event_perf_ms, trial.audio_started_perf_ms);
+  assert.equal(onset.event_monotonic_epoch_ms, 1000000 + onset.event_perf_ms);
+  h.media.currentTime = 0.125;
+  const originalKeyTime = h.time - 0.5;
+  h.el('response').emit('keydown', {key: 'a', code: 'KeyA', timeStamp: originalKeyTime});
+  await tick();
+  const key = h.savedEvents.at(-1);
+  assert.equal(key.browser_event_timestamp_ms, originalKeyTime);
+  assert.equal(key.browser_event_monotonic_epoch_ms, 1000000 + originalKeyTime);
+  assert.equal(key.browser_event_to_callback_ms, 0.75);
+  assert.equal(key.browser_event_system_epoch_ms_estimate, key.event_system_epoch_ms - 0.75);
+  assert.equal(key.audio_position_ms, 125);
+  assert.equal(key.audio_paused, false);
+  assert.equal(Date.parse(key.event_system_utc), key.event_system_epoch_ms);
+  // A backwards wall-clock correction must not corrupt elapsed-time measurements.
+  h.setWallOffset(-4500);
+  h.el('response').emit('keyup', {key: 'a', code: 'KeyA', timeStamp: h.time});
+  await tick();
+  const released = h.savedEvents.at(-1);
+  assert.ok(released.event_system_epoch_ms < key.event_system_epoch_ms);
+  assert.ok(released.event_monotonic_epoch_ms > key.event_monotonic_epoch_ms);
+  assert.ok(released.relative_to_audio_ms > key.relative_to_audio_ms);
+  assert.ok(released.system_minus_monotonic_ms < key.system_minus_monotonic_ms - 4999);
+  h.media.end();
+  await h.el('next').onclick(); await tick();
+  assert.ok(h.saved.trials[0].submitted_system_epoch_ms > 0);
+  assert.ok(h.saved.trials[0].audio_ended_system_epoch_ms > 0);
+  await h.el('confirm-stop').onclick(); await tick();
+  const {session, events} = h.downloads[0];
+  const text = core.csv(core.exportRows(session, events));
+  assert.ok(text.includes('"event_system_epoch_ms"'));
+  assert.ok(text.includes(`"${key.event_monotonic_epoch_ms}"`));
+  assert.ok(text.includes(`"${key.event_system_utc}"`));
+  assert.equal(session.trials[1].interrupted_system_epoch_ms, session.completed_system_epoch_ms);
 });
 
 test('invalid orthography does not advance, empty submitted answer is preserved', async () => {
