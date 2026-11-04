@@ -1,0 +1,44 @@
+{
+  "model_sha256": "ae315a79b623f244700e4afb9246c46a26066782e049ba174bf3ba433970ee9c",
+  "voices_sha256": "bca610b8308e8d99f32e6fe4197e7ec01679264efed0cac9140fe9c29f1fbf7d",
+  "packages": {
+    "kokoro-onnx": "0.6.1",
+    "misaki": "0.9.4",
+    "unidic-lite": "1.0.8",
+    "pyopenjtalk": "0.4.1"
+  },
+  "checks": [
+    {
+      "id": "practice_01",
+      "text": "明日は友達と公園まで歩きます。",
+      "mora_count_manual": 20,
+      "mora_count_openjtalk": 20,
+      "openjtalk_reading": "アシ’タワトモダチ’トコーエンマデアルキマス’",
+      "kokoro_phonemes": "asɨ βa tomodaʨi to koːeɴ made aɾɯkʲimasɨ."
+    },
+    {
+      "id": "practice_02",
+      "text": "机の上にきれいな花を飾りました。",
+      "mora_count_manual": 20,
+      "mora_count_openjtalk": 20,
+      "openjtalk_reading": "ツ’クエノウエニキレイナハナヲカザリマシ’タ",
+      "kokoro_phonemes": "ʦɨkɯe no ɯe ɲi kʲiɾeː na hana o kaʣaɾʲi maɕita."
+    },
+    {
+      "id": "practice_03",
+      "text": "駅の近くでおいしいパンを買ってきます。",
+      "mora_count_manual": 20,
+      "mora_count_openjtalk": 20,
+      "openjtalk_reading": "エキノチカクデオイシイパンヲカッテキマス’",
+      "kokoro_phonemes": "ekʲi no ʨikakɯ de oiɕiː paɴ o kaʔte kʲimasɨ."
+    },
+    {
+      "id": "practice_04",
+      "text": "弟は部屋で静かに本を読んでいた。",
+      "mora_count_manual": 20,
+      "mora_count_openjtalk": 20,
+      "openjtalk_reading": "オトートワヘヤデシズカニホンヲヨンデイタ",
+      "kokoro_phonemes": "otoːto βa heja de ɕizɨka ɲi hoɴ o jonde ita."
+    }
+  ]
+}

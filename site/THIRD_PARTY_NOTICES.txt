@@ -1,0 +1,14 @@
+Demonstration audio was generated locally with Kokoro-82M v1.0.
+Model: https://huggingface.co/hexgrad/Kokoro-82M (Apache-2.0)
+ONNX conversion and runtime: https://github.com/thewh1teagle/kokoro-onnx (MIT code)
+The model weights and runtime are not distributed with this static application.
+The 36 English cue recordings are placeholders, not Japanese accent conditions.
+Four separate Japanese practice recordings use Kokoro voice jf_alpha and Misaki
+Japanese G2P with the UniDic-lite dictionary. Their texts were newly authored.
+
+Instruction reference:
+Kang, O., Thomson, R. I., & Moran, M. (2018). Empirical approaches to measuring
+the intelligibility of different varieties of English in predicting listener
+comprehension. Language Learning, 68(1), 115-146. DOI: 10.1111/lang.12270.
+The Japanese instructions are newly written; the reference's word scoring is
+distinct from this application's mora alignment rules.
