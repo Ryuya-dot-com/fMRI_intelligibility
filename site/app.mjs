@@ -338,7 +338,7 @@ async function init() {
   await Promise.all(Array.from({length: 4}, async () => {
     while (remaining.length) {
       const s = remaining.shift();
-      const result = await fetch(s.audio);
+      const result = await fetch(s.audio, {cache: 'no-cache'});
       if (!result.ok) throw new Error(`音声を読み込めませんでした（${s.id}）。`);
       const audioBytes = await result.arrayBuffer();
       if (await hash(audioBytes) !== s.sha256) throw new Error(`音声が登録内容と一致しません（${s.id}）。`);

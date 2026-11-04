@@ -38,7 +38,8 @@ async function harness(options = {}) {
     navigator: {userAgent: 'simulated-browser', locks: {request: (name, opts, fn) => { fn({}); return Promise.resolve(); }}},
     performance: {now: () => time += 0.25, timeOrigin: 1000000}, Date: SystemDate, crypto: webcrypto,
     URL: {createObjectURL: () => 'blob:fixture'}, Blob, TextDecoder, structuredClone,
-    fetch: async path => {
+    fetch: async (path, options) => {
+      assert.equal(options?.cache, 'no-cache', 'Revalidate replaced audio as well as manifests');
       const bytes = path === './stimuli.json' ? Buffer.from(manifestText) : readFileSync(new URL(`../site/${path}`, import.meta.url));
       return {ok: true, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)};
     },
