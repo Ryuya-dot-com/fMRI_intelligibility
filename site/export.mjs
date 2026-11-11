@@ -29,8 +29,8 @@ export function scheduleRows(session) {
     const source = phase === 'practice' ? session.practice : session.manifest;
     for (const [index, id] of order.entries()) {
       const s = source.stimuli.find(s => s.id === id);
-      rows.push({session_id: session.id, phase, trial_number: index + 1, session_trial_number: rows.length + 1, stimulus_id: id,
-        sentence_id: s.sentence_id, speaker_id: s.speaker_id, condition: s.condition, audio_file: s.audio, audio_sha256: s.sha256, reference_kana: s.reference_kana || ''});
+      rows.push({session_id: session.id, counterbalance_list: session.counterbalance_list || '', anchor_version: session.practice?.version || '', phase, trial_number: index + 1, session_trial_number: rows.length + 1, stimulus_id: id,
+        sentence_id: s.sentence_id, speaker_id: s.speaker_id, condition: s.condition, audio_file: s.audio, audio_sha256: s.sha256, reference_kana: s.reference_kana || '', reference_status: s.reference_status || ''});
     }
   }
   return rows;

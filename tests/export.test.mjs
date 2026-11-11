@@ -4,7 +4,7 @@ import {readFileSync, mkdtempSync, existsSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {performance} from 'node:perf_hooks';
-import {csv, resultScore, exportRows, VERSION} from '../site/core.mjs';
+import {csv, resultScore, exportRows, participantList, VERSION} from '../site/core.mjs';
 import {exportTables, archiveBytes, trialMetrics} from '../site/export.mjs';
 import {readArchive, analyzeArchives, parseCsv, expandEventValues, main} from '../tools/analyze.mjs';
 import {sessionMetadata} from '../site/storage.mjs';
@@ -12,9 +12,11 @@ import {unzipSync} from '../site/vendor/fflate-0.8.2.mjs';
 const practice = JSON.parse(readFileSync(new URL('../site/practice.json', import.meta.url)));
 const manifest = JSON.parse(readFileSync(new URL('../site/stimuli.json', import.meta.url)));
 function fixture() {
-  const s = practice.stimuli[0];
+  const localPractice = structuredClone(practice);
+  const s = localPractice.stimuli[0];
+  Object.assign(s, {reference_kana: 'あしたはともだちとこうえんまであるきます', reference_status: 'verified'});
   const trial = {phase: 'practice', trial_number: 1, session_trial_number: 1, stimulus_id: s.id, trial_status: 'completed', response: '明日は友達と公園まで歩きます。', audio_completed: true, audio_started_perf_ms: 100, audio_ended_perf_ms: 500, submitted_perf_ms: 1000, ...resultScore(s, '明日は友達と公園まで歩きます。', 'study')};
-  const session = {id: 'session-a', participant_id: '900008', participant_name: '架空氏名', app_version: VERSION, manifest, practice, practice_order: practice.stimuli.map(s => s.id), order: manifest.stimuli.map(s => s.id), status: 'completed', log_version: 'value-reference-v1', trials: [trial]};
+  const session = {id: 'session-a', participant_id: '900008', participant_name: '架空氏名', app_version: VERSION, manifest, practice: localPractice, counterbalance_list: 2, practice_order: practice.stimuli.map(s => s.id), order: participantList(manifest, 2).stimuli.map(s => s.id), status: 'completed', log_version: 'value-reference-v1', trials: [trial]};
   const common = {session_id: session.id, phase: 'practice', trial_number: 1, session_trial_number: 1};
   const events = [{...common, seq: 1, event_type: 'input', event_perf_ms: 250.125, event_system_epoch_ms: 1700000000000, browser_event_timestamp_ms: 249.75, value_json: JSON.stringify(trial.response), value_seq: 1, input_data_json: JSON.stringify(trial.response), input_type: 'insertText', is_composing: false}, {...common, seq: 2, event_type: 'keyup', event_perf_ms: 251.875, value_seq: 1, key_json: '"Enter"'}];
   return {session, events};
@@ -43,7 +45,7 @@ test('human reading review is matched to exact raw response and never overwrites
   const before = analyzeArchives([archive]);
   assert.equal(before.pending.length, 1);
   assert.equal(before.analysis[0].correct_mora_count, undefined);
-  const review = {...before.pending[0], reviewed_reading: practice.stimuli[0].reference_kana, reviewer: 'r1'};
+  const review = {...before.pending[0], reviewed_reading: session.practice.stimuli[0].reference_kana, reviewer: 'r1'};
   const after = analyzeArchives([archive], [review]);
   assert.equal(after.pending.length, 0);
   assert.equal(after.analysis[0].correct_mora_count, 20);
@@ -57,6 +59,42 @@ test('human reading review is matched to exact raw response and never overwrites
   assert.throws(() => analyzeArchives([archive, archive]), /Duplicate session/);
   const aborted = structuredClone(archive); aborted.trials[0].trial_status = 'interrupted';
   assert.throws(() => analyzeArchives([aborted], [review]), /incomplete/);
+});
+
+test('verified anchor references rescore saved answers and summaries keep phases separate', () => {
+  const {session, events} = fixture();
+  session.practice.stimuli[0].reference_kana = '';
+  session.practice.stimuli[0].reference_status = 'missing';
+  const anchor = session.practice.stimuli[0];
+  Object.assign(session.trials[0], {response: 'ねこ', score_status: 'pending_reference', reading_status: 'automatic_kana', response_reading: 'ねこ'});
+  const mainStimulus = session.manifest.stimuli.find(s => s.id === session.order[0]);
+  session.trials.push({phase: 'main', trial_number: 1, session_trial_number: 11, stimulus_id: mainStimulus.id,
+    trial_status: 'completed', audio_completed: true, response: mainStimulus.reference_kana,
+    ...resultScore(mainStimulus, mainStimulus.reference_kana, 'study')});
+  const archive = readArchive(archiveBytes(session, events));
+  const before = analyzeArchives([archive]);
+  assert.ok(before.summaries.every(row => row.scored_trials === 0 && row.mora_weighted_accuracy === ''));
+  const target = {stimulus_id: anchor.id, audio_sha256: anchor.sha256, reviewed_reference_kana: 'ねこ', reviewer: 'r1'};
+  const after = analyzeArchives([archive], [], [target]);
+  assert.equal(after.analysis[0].correct_mora_count, 2);
+  assert.equal(after.analysis[0].analysis_eligible_anchor, true);
+  assert.equal(after.analysis[0].analysis_eligible_main, false);
+  assert.equal(after.analysis[1].score_status, 'review_reference');
+  assert.equal(after.summaries[0].phase_role, 'common_anchor');
+  assert.equal(after.summaries[0].planned_trials, 10);
+  assert.equal(after.summaries[0].scored_trials, 1);
+  assert.equal(after.summaries[0].all_planned_trials_scored, false);
+  assert.equal(after.summaries[0].mora_weighted_accuracy, 1);
+  assert.equal(after.summaries[1].planned_trials, 48);
+  assert.equal(after.summaries[1].scored_trials, 0);
+  assert.equal(archive.trials[0].score_status, 'pending_reference');
+  assert.throws(() => analyzeArchives([archive], [], [target, target]), /Duplicate reference/);
+  assert.throws(() => analyzeArchives([archive], [], [{...target, reviewer: ''}]), /reviewer/);
+  const mismatch = analyzeArchives([archive], [], [{...target, audio_sha256: '0'.repeat(64)}]);
+  assert.equal(mismatch.analysis[0].score_status, 'pending_reference');
+  archive.trials[0].trial_status = 'interrupted';
+  const interrupted = analyzeArchives([archive], [], [target]);
+  assert.equal(interrupted.summaries[0].scored_trials, 0);
 });
 
 test('CSV parsing retains multiline JSON, punctuation, quotes, BOM and empty fields', () => {

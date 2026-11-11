@@ -1,4 +1,4 @@
-export const VERSION = 'intelligibility-2026-11-04-v4';
+export const VERSION = 'intelligibility-2026-11-11-v5';
 export const SCORE_VERSION = 'mora-levenshtein-matches-v1';
 export const READING_VERSION = 'kana-normalization-v1';
 export const CONDITIONS = ['Japanese', 'Asian', 'Romance'];
@@ -28,6 +28,7 @@ export function rng(seed) {
 
 export function makeOrder(stimuli, id, version) {
   const random = rng(`${version}:order:${participantId(id)}`);
+  const condition = new Map(stimuli.map(s => [s.id, s.condition]));
   // Rejection sampling preserves the requested restriction without silently relaxing it.
   for (let attempt = 0; attempt < 100000; attempt++) {
     const order = stimuli.map(s => s.id);
@@ -35,10 +36,16 @@ export function makeOrder(stimuli, id, version) {
       const j = Math.floor(random() * (i + 1));
       [order[i], order[j]] = [order[j], order[i]];
     }
-    const condition = new Map(stimuli.map(s => [s.id, s.condition]));
     if (order.every((s, i) => i < 2 || condition.get(s) !== condition.get(order[i - 1]) || condition.get(s) !== condition.get(order[i - 2]))) return order;
   }
   throw new Error('提示順を作成できませんでした。実験者にお知らせください。');
+}
+
+export function participantList(manifest, id) {
+  const listId = Number((BigInt(participantId(id)) - 1n) % 6n) + 1;
+  const list = manifest.lists.find(list => list.id === listId);
+  const byId = new Map(manifest.stimuli.map(s => [s.id, s]));
+  return {id: listId, stimuli: list.stimulus_ids.map(id => byId.get(id))};
 }
 
 export function normalizeKana(value) {
@@ -118,23 +125,40 @@ export function scoreMora(reference, response) {
   };
 }
 
+function validateAudio(s) {
+  if (!/^audio\/[A-Za-z0-9_-]+\.wav$/.test(s.audio) || !/^[a-f0-9]{64}$/.test(s.sha256)) throw new Error('音声ファイル・ハッシュを確認してください。');
+  if (!['missing', 'script_unverified', 'verified'].includes(s.reference_status)) throw new Error('正答の確認状態が未登録です。');
+  if (s.reference_status !== 'missing' && (!s.reference_kana || !morae(s.reference_kana).length)) throw new Error('正答の読みを確認してください。');
+  if (s.reference_status === 'missing' && s.reference_kana) throw new Error('正答と確認状態が一致しません。');
+  if (s.reference_kana && morae(s.reference_kana).length > 300) throw new Error('正答が長すぎます。');
+  if (s.accepted_variants_kana !== undefined && (!Array.isArray(s.accepted_variants_kana) || s.accepted_variants_kana.some(v => typeof v !== 'string' || morae(v).length !== morae(s.reference_kana || '').length))) throw new Error('許容表記は正答と同じモーラ数で登録してください。');
+}
+
 export function validateManifest(manifest) {
-  if (!manifest.version || !['placeholder', 'study'].includes(manifest.mode) || manifest.stimuli?.length !== 36) throw new Error('刺激設定には36件の音声が必要です。');
-  const ids = new Set(), sentences = new Set(), speakers = new Map();
+  if (!manifest.version || manifest.mode !== 'study' || !manifest.counterbalance_version || manifest.stimuli?.length !== 288 || manifest.lists?.length !== 6) throw new Error('本番は288音声・6リストの設定が必要です。');
+  const ids = new Set(), sentences = new Map(), speakers = new Map(), pairs = new Set();
   for (const s of manifest.stimuli) {
-    if (!s.id || ids.has(s.id) || !s.sentence_id || sentences.has(s.sentence_id)) throw new Error('刺激または文のIDが重複しています。');
+    if (!s.id || ids.has(s.id) || !s.sentence_id || pairs.has(`${s.sentence_id}:${s.speaker_id}`)) throw new Error('刺激または文・話者の組合せが重複しています。');
     if (!CONDITIONS.includes(s.condition) || !/^[A-Za-z0-9_-]+$/.test(s.speaker_id)) throw new Error('話者・条件の設定が不正です。');
-    if (!/^audio\/[A-Za-z0-9_-]+\.wav$/.test(s.audio) || !/^[a-f0-9]{64}$/.test(s.sha256)) throw new Error('音声ファイル・ハッシュを確認してください。');
-    if (manifest.mode === 'study' && (!s.reference_kana || !morae(s.reference_kana).length)) throw new Error('本番刺激の正答が未登録です。');
-    if (s.reference_kana && morae(s.reference_kana).length > 300) throw new Error('正答が長すぎます。');
-    if (s.accepted_variants_kana !== undefined && (!Array.isArray(s.accepted_variants_kana) || s.accepted_variants_kana.some(v => typeof v !== 'string' || morae(v).length !== morae(s.reference_kana || '').length))) throw new Error('許容表記は正答と同じモーラ数で登録してください。');
+    validateAudio(s);
     const speaker = speakers.get(s.speaker_id) || {condition: s.condition, count: 0};
     if (speaker.condition !== s.condition) throw new Error('同じ話者に異なる条件があります。');
     speaker.count++;
     speakers.set(s.speaker_id, speaker);
-    ids.add(s.id); sentences.add(s.sentence_id);
+    ids.add(s.id); pairs.add(`${s.sentence_id}:${s.speaker_id}`);
+    sentences.set(s.sentence_id, (sentences.get(s.sentence_id) || 0) + 1);
   }
-  if (speakers.size !== 12 || [...speakers.values()].some(s => s.count !== 3) || CONDITIONS.some(c => [...speakers.values()].filter(s => s.condition === c).length !== 4)) throw new Error('各条件4話者・各話者3音声の設定が必要です。');
+  if (speakers.size !== 12 || [...speakers.values()].some(s => s.count !== 24) || CONDITIONS.some(c => [...speakers.values()].filter(s => s.condition === c).length !== 4) || sentences.size !== 48 || [...sentences.values()].some(n => n !== 6)) throw new Error('48文・12話者の本番刺激構成が不正です。');
+  const byId = new Map(manifest.stimuli.map(s => [s.id, s])), used = new Set(), listIds = new Set();
+  for (const list of manifest.lists) {
+    if (!Number.isInteger(list.id) || list.id < 1 || list.id > 6 || listIds.has(list.id) || list.stimulus_ids?.length !== 48) throw new Error('リスト番号または試行数が不正です。');
+    listIds.add(list.id);
+    const items = list.stimulus_ids.map(id => {
+      if (!byId.has(id) || used.has(id)) throw new Error('リスト間で音声が重複しているか、未登録です。');
+      used.add(id); return byId.get(id);
+    });
+    if (new Set(items.map(s => s.sentence_id)).size !== 48 || [...speakers.keys()].some(id => items.filter(s => s.speaker_id === id).length !== 4) || CONDITIONS.some(c => items.filter(s => s.condition === c).length !== 16)) throw new Error('各リストには異なる48文・各話者4文・各条件16文が必要です。');
+  }
   return manifest;
 }
 
@@ -142,25 +166,29 @@ export function resultScore(stimulus, response, mode) {
   const kana = normalizeKana(response);
   const reading = {response_reading: validKana(kana) ? kana : '', reading_status: validKana(kana) ? 'automatic_kana' : 'needs_review', reading_method: validKana(kana) ? 'kana_normalization' : '', reading_version: READING_VERSION};
   if (mode === 'placeholder') return {...reading, score_status: 'placeholder_not_scored', score_version: SCORE_VERSION};
+  if (!stimulus.reference_kana) return {...reading, score_status: 'pending_reference', score_version: SCORE_VERSION};
   if (reading.reading_status === 'needs_review') return {...reading, score_status: 'pending_reading', score_version: SCORE_VERSION, reference_mora_count: morae(stimulus.reference_kana).length};
   try {
     const references = [stimulus.reference_kana, ...(stimulus.accepted_variants_kana || [])];
     const candidates = references.map(reference => ({...scoreMora(reference, kana), scored_reference_kana: reference}));
     candidates.sort((a, b) => b.correct_mora_count - a.correct_mora_count);
-    return {...reading, ...candidates[0]};
+    const score = candidates[0];
+    if (stimulus.reference_status === 'script_unverified') return {...reading, ...score, score_status: 'review_reference', unreviewed_score_status: score.score_status};
+    return {...reading, ...score};
   }
   catch (error) { return {...reading, reading_status: 'needs_review', score_status: 'review_response', score_version: SCORE_VERSION, score_note: error.message}; }
 }
 
 export function validatePractice(practice, manifest) {
-  if (!practice.version || practice.stimuli?.length !== 4) throw new Error('練習用の音声は4件必要です。');
+  if (!practice.version || practice.role !== 'common_anchor' || practice.stimuli?.length !== 10) throw new Error('共通アンカー用の音声は10件必要です。');
   const ids = new Set(manifest.stimuli.map(s => s.id));
   const sentences = new Set(manifest.stimuli.map(s => s.sentence_id));
+  const hashes = new Set(manifest.stimuli.map(s => s.sha256));
   for (const s of practice.stimuli) {
     if (!s.id || ids.has(s.id) || !s.sentence_id || sentences.has(s.sentence_id)) throw new Error('練習と本番の刺激ID・文IDは別にしてください。');
-    if (s.condition !== 'practice' || !s.speaker_id || !/^audio\/[A-Za-z0-9_-]+\.wav$/.test(s.audio) || !/^[a-f0-9]{64}$/.test(s.sha256)) throw new Error('練習用の音声設定を確認してください。');
-    if (typeof s.reference_kana !== 'string' || morae(s.reference_kana).length !== 20) throw new Error('練習文の正答は20モーラで登録してください。');
-    ids.add(s.id); sentences.add(s.sentence_id);
+    if (s.condition !== 'practice' || !s.speaker_id || hashes.has(s.sha256)) throw new Error('練習用の音声設定を確認してください。');
+    validateAudio(s);
+    ids.add(s.id); sentences.add(s.sentence_id); hashes.add(s.sha256);
   }
   return practice;
 }

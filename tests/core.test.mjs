@@ -2,21 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
-import {participantId, participantName, makeOrder, morae, scoreMora, validResponse, validateManifest, validatePractice, resultScore, csv, exportRows} from '../site/core.mjs';
+import {participantId, participantName, participantList, makeOrder, morae, scoreMora, validResponse, validateManifest, validatePractice, resultScore, csv, exportRows} from '../site/core.mjs';
 const manifest = JSON.parse(readFileSync(new URL('../site/stimuli.json', import.meta.url)));
 const practice = JSON.parse(readFileSync(new URL('../site/practice.json', import.meta.url)));
 
-test('four distinct practice sentences contain exactly 20 morae, verified against manual segments', () => {
+test('ten shared anchors use different sentences and audio from all 288 main recordings', () => {
   validatePractice(practice, manifest);
-  for (const s of practice.stimuli) {
-    assert.equal(morae(s.reference_kana).length, 20);
-    assert.deepEqual(morae(s.reference_kana), s.mora_segments);
-  }
-  const invalid = structuredClone(practice);
-  invalid.stimuli[0].reference_kana += 'ね';
-  assert.throws(() => validatePractice(invalid, manifest));
+  assert.equal(practice.stimuli.length, 10);
   const collision = structuredClone(practice);
-  collision.stimuli[0].id = manifest.stimuli[0].id;
+  collision.stimuli[0].sha256 = manifest.stimuli[0].sha256;
+  assert.throws(() => validatePractice(collision, manifest));
+  collision.stimuli[0] = {...practice.stimuli[0], sentence_id: manifest.stimuli[0].sentence_id};
   assert.throws(() => validatePractice(collision, manifest));
 });
 
@@ -29,29 +25,46 @@ test('participant name required; Unicode and exact export are preserved safely',
   assert.ok(csv(rows).includes("'=1+1"));
 });
 
-test('36 unique sentences, four speakers per condition, three trials per speaker', () => {
+test('six complementary lists cover all recordings, with 48 unique sentences and 4 per speaker', () => {
   validateManifest(manifest);
+  const used = [];
+  for (let id = 1; id <= 6; id++) {
+    const list = participantList(manifest, id);
+    assert.equal(list.id, id);
+    assert.equal(list.stimuli.length, 48);
+    assert.equal(new Set(list.stimuli.map(s => s.sentence_id)).size, 48);
+    for (const speaker of new Set(manifest.stimuli.map(s => s.speaker_id))) assert.equal(list.stimuli.filter(s => s.speaker_id === speaker).length, 4);
+    used.push(...list.stimuli.map(s => s.id));
+  }
+  assert.equal(new Set(used).size, 288);
+  assert.deepEqual(used.sort(), manifest.stimuli.map(s => s.id).sort());
   const bad = structuredClone(manifest);
-  bad.stimuli[0].speaker_id = 'bad';
+  bad.lists[1].stimulus_ids[0] = bad.lists[0].stimulus_ids[0];
   assert.throws(() => validateManifest(bad));
-  const production = {...manifest, mode: 'study'};
-  assert.throws(() => validateManifest(production));
+  bad.lists = structuredClone(manifest.lists);
+  bad.lists[0].stimulus_ids[0] = 'missing';
+  assert.throws(() => validateManifest(bad));
 });
 
-test('1000 participant schedules preserve counts and forbid three consecutive conditions', () => {
+test('1000 participant schedules preserve assigned lists and forbid three consecutive conditions', () => {
   const firstConditions = new Set();
-  const lookup = new Map(manifest.stimuli.map(s => [s.id, s]));
   for (let id = 1; id <= 1000; id++) {
-    const order = makeOrder(manifest.stimuli, id, manifest.version);
-    assert.equal(new Set(order).size, 36);
-    assert.deepEqual([...order].sort(), manifest.stimuli.map(s => s.id).sort());
+    const {stimuli, id: listId} = participantList(manifest, id);
+    assert.equal(listId, (id - 1) % 6 + 1);
+    const lookup = new Map(stimuli.map(s => [s.id, s]));
+    const order = makeOrder(stimuli, id, manifest.version);
+    assert.equal(new Set(order).size, 48);
+    assert.deepEqual([...order].sort(), stimuli.map(s => s.id).sort());
     const conditions = order.map(s => lookup.get(s).condition);
     firstConditions.add(conditions[0]);
-    for (let i = 2; i < 36; i++) assert.ok(!(conditions[i] === conditions[i - 1] && conditions[i] === conditions[i - 2]));
+    for (let i = 2; i < 48; i++) assert.ok(!(conditions[i] === conditions[i - 1] && conditions[i] === conditions[i - 2]));
   }
+  const selected = participantList(manifest, 1).stimuli;
   assert.equal(firstConditions.size, 3);
-  assert.deepEqual(makeOrder(manifest.stimuli, '001', manifest.version), makeOrder(manifest.stimuli, 1, manifest.version));
-  assert.notDeepEqual(makeOrder(manifest.stimuli, 1, manifest.version), makeOrder(manifest.stimuli, 49, manifest.version));
+  assert.deepEqual(participantList(manifest, '001'), participantList(manifest, 1));
+  assert.deepEqual(makeOrder(selected, '001', manifest.version), makeOrder(selected, 1, manifest.version));
+  assert.notDeepEqual(makeOrder(selected, 1, manifest.version), makeOrder(selected, 7, manifest.version));
+  assert.equal(participantList(manifest, '999999999999').id, 3);
   assert.throws(() => participantId('0'));
   assert.throws(() => participantId('1.2'));
 });
@@ -109,9 +122,9 @@ test('CSV retains Unicode, commas, newlines, quotes and guards formulas', () => 
 });
 
 test('CSV separates scheduled, observed and event rows, and leaves unpresented trials unobserved', () => {
-  const session = {id: 'test', participant_id: '1', manifest, order: makeOrder(manifest.stimuli, 1, manifest.version), trials: [{trial_number: 1, trial_status: 'interrupted', response: 'ねこ'}]};
+  const session = {id: 'test', participant_id: '1', manifest, order: makeOrder(participantList(manifest, 1).stimuli, 1, manifest.version), trials: [{trial_number: 1, trial_status: 'interrupted', response: 'ねこ'}]};
   const rows = exportRows(session, [{event_type: 'input', value_json: '"ねこ"'}]);
-  assert.equal(rows.filter(r => r.row_type === 'schedule').length, 36);
+  assert.equal(rows.filter(r => r.row_type === 'schedule').length, 48);
   assert.equal(rows.filter(r => r.row_type === 'trial').length, 1);
   assert.equal(rows.filter(r => r.row_type === 'event').length, 1);
   assert.equal(rows.find(r => r.row_type === 'trial').proportion_correct, undefined);
@@ -132,4 +145,12 @@ test('mixed scripts preserve raw input, normalize only kana and defer uncertain 
   }
   assert.equal(validResponse('あ'.repeat(2001)), false);
   assert.equal(validResponse(String.fromCharCode(0)), false);
+});
+
+test('missing references and unverified script references are never final scores', () => {
+  assert.equal(resultScore({reference_kana: '', reference_status: 'missing'}, '', 'study').score_status, 'pending_reference');
+  assert.equal(resultScore({reference_kana: '', reference_status: 'missing'}, '', 'study').proportion_correct, undefined);
+  const provisional = resultScore({reference_kana: 'ねこ', reference_status: 'script_unverified'}, 'ねこ', 'study');
+  assert.equal(provisional.proportion_correct, 1);
+  assert.equal(provisional.score_status, 'review_reference');
 });

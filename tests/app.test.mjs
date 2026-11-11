@@ -27,7 +27,7 @@ async function harness(options = {}) {
   const panels = ['welcome', 'instructions', 'task', 'practice-done', 'finish', 'recovery'].map(el);
   let media, time = 0, wallOffset = 500, saved, failSave = false, failedOnce = false, lateWrites = 0;
   class SystemDate extends Date { static now() { return Math.floor(1000000 + time + wallOffset); } }
-  const savedEvents = [], downloads = [];
+  const savedEvents = [], downloads = [], fetched = [];
   class Audio extends Element {
     constructor() { super('audio'); media = this; this.currentTime = 0; this.duration = 2; this.plays = 0; this.paused = true; this.ended = false; this.playbackRate = 1; }
     play() { this.plays++; if (options.blockPlay && this.plays === 1) return Promise.reject(Object.assign(new Error('blocked'), {name: 'NotAllowedError'})); this.paused = false; this.ended = false; this.emit('playing'); return Promise.resolve(); }
@@ -38,8 +38,9 @@ async function harness(options = {}) {
   const context = {...core, sessionMetadata, document, Audio, window: {scrollTo() {}, addEventListener() {}},
     navigator: {userAgent: 'simulated-browser', locks: {request: (name, opts, fn) => { fn({}); return Promise.resolve(); }}},
     performance: {now: () => time += 0.25, timeOrigin: 1000000}, Date: SystemDate, crypto: webcrypto,
-    URL: {createObjectURL: () => 'blob:fixture'}, Blob, TextDecoder, structuredClone,
+    URL: {createObjectURL: () => 'blob:fixture', revokeObjectURL() {}}, Blob, TextDecoder, structuredClone,
     fetch: async (path, options) => {
+      fetched.push(path);
       assert.equal(options?.cache, 'no-cache', 'Revalidate replaced audio as well as manifests');
       const bytes = path === './stimuli.json' ? Buffer.from(manifestText) : readFileSync(new URL(`../site/${path}`, import.meta.url));
       return {ok: true, arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)};
@@ -64,18 +65,20 @@ async function harness(options = {}) {
   for (let i = 0; i < 500 && el('setup-next').disabled; i++) await tick();
   assert.equal(el('error').textContent, undefined);
   assert.equal(el('setup-next').disabled, false);
-  return {el, media, downloads, savedEvents, get saved() { return saved; }, get lateWrites() { return lateWrites; }, fail: () => { failSave = true; },
-    get time() { return time; }, setWallOffset: value => { wallOffset = value; },
-    start: async (name = '動作確認用') => { el('participant').value = '900002'; el('participant-name').value = name; el('begin').disabled = false; await el('begin').onclick(); await tick(); },
+  return {el, media, downloads, savedEvents, fetched, get saved() { return saved; }, get lateWrites() { return lateWrites; }, fail: () => { failSave = true; },
+    get time() { return time; }, advanceTime: ms => { time += ms; }, setWallOffset: value => { wallOffset = value; },
+    start: async (name = '動作確認用') => { el('participant').value = options.participantId || '900002'; el('participant-name').value = name; await el('setup').onsubmit({preventDefault() {}}); el('begin').disabled = false; await el('begin').onclick(); await tick(); },
   };
 }
 
-test('4 practice + 36 main trials: gates, phase transition, identity and CSV separation', async () => {
+test('10 practice + 48 main trials: gates, phase transition, identity and CSV separation', async () => {
   const h = await harness(); await h.start();
+  assert.equal(h.fetched.filter(path => path.endsWith('.wav')).length, 58);
+  assert.equal(h.saved.counterbalance_list, 2);
   await h.el('begin-main').onclick();
   assert.equal(h.media.plays, 1, 'cannot skip practice');
-  for (let i = 1; i <= 40; i++) {
-    assert.equal(h.el('progress-text').textContent, i <= 4 ? `練習 ${i} / 4` : `${i - 4} / 36`);
+  for (let i = 1; i <= 58; i++) {
+    assert.equal(h.el('progress-text').textContent, i <= 10 ? `練習 ${i} / 10` : `${i - 10} / 48`);
     assert.equal(h.el('response').disabled, false);
     assert.equal(h.el('next').disabled, true);
     await h.el('next').onclick();
@@ -85,41 +88,61 @@ test('4 practice + 36 main trials: gates, phase transition, identity and CSV sep
     h.el('response').emit('compositionupdate', {data: 'きょう'});
     h.el('response').emit('input', {data: 'きょう', inputType: 'insertCompositionText', isComposing: true});
     h.media.end();
+    h.advanceTime(600000);
+    h.el('retry-play').onclick();
+    assert.equal(h.media.plays, i, 'no replay or automatic advance after ten minutes');
     assert.equal(h.el('next').disabled, true);
     h.el('response').emit('compositionend', {data: 'きょう'});
     assert.equal(h.el('next').disabled, false);
     h.el('response').emit('keyup', {key: 'Enter', code: 'Enter'});
     assert.equal(h.media.plays, i);
     await h.el('next').onclick(); await tick();
-    if (i === 4) {
+    if (i === 10) {
       assert.equal(h.el('practice-done').hidden, false);
-      assert.equal(h.media.plays, 4, 'main audio waits for explicit start');
+      assert.equal(h.media.plays, 10, 'main audio waits for explicit start');
       assert.equal(h.saved.phase, 'main_ready');
       await h.el('begin-main').onclick(); await tick();
       await h.el('begin-main').onclick();
-      assert.equal(h.media.plays, 5, 'double start does not skip a main trial');
+      assert.equal(h.media.plays, 11, 'double start does not skip a main trial');
     }
   }
   assert.equal(h.downloads.length, 1);
   const {session, events} = h.downloads[0];
   assert.equal(session.status, 'completed');
   assert.equal(session.participant_name, '動作確認用');
-  assert.equal(session.trials.length, 40);
-  assert.equal(session.trials.filter(t => t.trial_status === 'completed').length, 40);
-  assert.equal(events.filter(e => e.event_type === 'compositionend').length, 40);
-  assert.equal(events.filter(e => e.event_type === 'audio_started').length, 40);
-  assert.equal(events.filter(e => e.event_type === 'audio_ended').length, 40);
+  assert.equal(session.trials.length, 58);
+  assert.equal(session.trials.filter(t => t.trial_status === 'completed').length, 58);
+  assert.equal(events.filter(e => e.event_type === 'compositionend').length, 58);
+  assert.equal(events.filter(e => e.event_type === 'audio_started').length, 58);
+  assert.equal(events.filter(e => e.event_type === 'audio_ended').length, 58);
   assert.ok(session.trials.every(t => t.response === 'きょう' && t.submitted_perf_ms > t.audio_ended_perf_ms && t.first_input_perf_ms > t.audio_started_perf_ms));
   assert.equal(h.savedEvents.length, events.length);
   const rows = core.exportRows(session, events);
-  assert.equal(rows.filter(r => r.row_type === 'trial' && r.phase === 'main').length, 36);
-  assert.equal(rows.filter(r => r.row_type === 'trial' && r.phase === 'practice').length, 4);
-  assert.equal(rows.filter(r => r.row_type === 'schedule').length, 40);
-  assert.equal(rows.filter(r => r.row_type === 'trial' && r.phase === 'practice' && r.reference_mora_count === 20).length, 4);
-  assert.equal(rows.filter(r => r.row_type === 'trial' && r.phase === 'main' && r.score_status === 'placeholder_not_scored').length, 36);
-  assert.equal(session.trials[4].trial_number, 1);
-  assert.equal(session.trials[4].session_trial_number, 5);
-  assert.ok(events.filter(e => e.event_type === 'input').every(e => e.phase === (e.session_trial_number <= 4 ? 'practice' : 'main')));
+  assert.equal(rows.filter(r => r.row_type === 'trial' && r.phase === 'main').length, 48);
+  assert.equal(rows.filter(r => r.row_type === 'trial' && r.phase === 'practice').length, 10);
+  assert.equal(rows.filter(r => r.row_type === 'schedule').length, 58);
+  assert.equal(rows.filter(r => r.row_type === 'trial' && r.phase === 'practice' && r.score_status === 'pending_reference').length, 10);
+  assert.equal(rows.filter(r => r.row_type === 'trial' && r.phase === 'main' && r.score_status === 'review_reference').length, 48);
+  assert.equal(session.trials[10].trial_number, 1);
+  assert.equal(session.trials[10].session_trial_number, 11);
+  assert.ok(events.filter(e => e.event_type === 'input').every(e => e.phase === (e.session_trial_number <= 10 ? 'practice' : 'main')));
+});
+
+test('all six IDs select distinct main sets but identical common anchor order', async () => {
+  const allMain = new Set();
+  let anchorOrder;
+  for (let id = 1; id <= 6; id++) {
+    const h = await harness({participantId: String(id)}); await h.start();
+    const s = h.saved;
+    assert.equal(s.counterbalance_list, id);
+    assert.equal(s.order.length, 48);
+    assert.equal(s.practice_order.length, 10);
+    if (anchorOrder) assert.deepEqual(s.practice_order, anchorOrder);
+    anchorOrder = s.practice_order;
+    for (const key of s.order) { assert.ok(!allMain.has(key)); allMain.add(key); }
+    await h.el('confirm-stop').onclick();
+  }
+  assert.equal(allMain.size, 288);
 });
 
 test('system milliseconds, monotonic clocks, browser queue delay and audio positions survive CSV export', async () => {
@@ -169,13 +192,13 @@ test('kanji is accepted pending reading review, empty submitted answer is preser
   await h.el('next').onclick();
   assert.equal(h.media.plays, 2);
   assert.equal(h.saved.trials[0].response, '今日');
-  assert.equal(h.saved.trials[0].score_status, 'pending_reading');
+  assert.equal(h.saved.trials[0].score_status, 'pending_reference');
   assert.equal(h.saved.trials[0].proportion_correct, undefined);
   h.media.end();
   h.el('response').value = '';
   await h.el('next').onclick(); await tick();
   assert.equal(h.saved.trials[1].response, '');
-  assert.equal(h.saved.trials[1].proportion_correct, 0);
+  assert.equal(h.saved.trials[1].proportion_correct, undefined);
   assert.equal(h.media.plays, 3);
 });
 
@@ -226,7 +249,7 @@ test('reload preserves prior response and marks it interrupted without replay', 
   assert.equal(s.trials[0].phase, 'practice');
 });
 
-test('blank participant name blocks audio and setup; completed practice is scored out of twenty', async () => {
+test('blank participant name blocks audio and setup; anchor with no reference preserves the answer without a fabricated score', async () => {
   const h = await harness(); await h.start('   ');
   assert.equal(h.media.plays, 0);
   assert.equal(h.el('welcome').hidden, false);
@@ -236,8 +259,8 @@ test('blank participant name blocks audio and setup; completed practice is score
   h.media.end();
   h.el('response').value = 'あしたはともだちとこうえんまであるきます';
   await h.el('next').onclick(); await tick();
-  assert.equal(h.saved.trials[0].correct_mora_count, 20);
-  assert.equal(h.saved.trials[0].proportion_correct, 1);
+  assert.equal(h.saved.trials[0].correct_mora_count, undefined);
+  assert.equal(h.saved.trials[0].proportion_correct, undefined);
 });
 
 

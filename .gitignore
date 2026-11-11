@@ -1,5 +1,9 @@
 results/
 *.csv
+!lists/*.csv
+tests/artifacts/
+design_history/
+github-pages.zip
 .venv/
 __pycache__/
 .DS_Store

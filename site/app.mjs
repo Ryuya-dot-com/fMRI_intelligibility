@@ -1,4 +1,4 @@
-import {VERSION, participantId, participantName, makeOrder, validateManifest, validatePractice, validResponse, resultScore} from './core.mjs';
+import {VERSION, participantId, participantName, participantList, makeOrder, validateManifest, validatePractice, validResponse, resultScore} from './core.mjs';
 import {openDatabase, save, read, clearActive, loadRecord, sessionMetadata} from './storage.mjs';
 import {downloadArchive} from './export.mjs';
 
@@ -9,6 +9,7 @@ let db, manifest, manifestHash, practice, practiceHash, session, current, recove
 let events = [], seq = 0, pending = Promise.resolve(), storageFailed = false;
 let composing = false, advancing = false, checkPlayed = false;
 let releaseLock, lastValueJson, lastValueSeq;
+let preparedId, selectedList;
 const assets = new Map();
 function captureTime() {
   const perf_ms = performance.now();
@@ -159,7 +160,7 @@ function startTrial() {
   const index = session.trials.filter(t => t.phase === session.phase).length;
   const s = (isPractice ? practice : manifest).stimuli.find(s => s.id === order[index]);
   const stamp = captureTime();
-  current = {phase: session.phase, session_trial_number: session.trials.length + 1, trial_number: index + 1, stimulus_id: s.id, sentence_id: s.sentence_id, speaker_id: s.speaker_id, condition: s.condition, audio_file: s.audio, audio_sha256: s.sha256, audio_sample_rate_hz: s.sample_rate || '', audio_frames: s.frames || '', reference_kana: s.reference_kana || '', trial_status: 'in_progress', response: '', audio_completed: false};
+  current = {phase: session.phase, counterbalance_list: session.counterbalance_list, anchor_version: practice.version, session_trial_number: session.trials.length + 1, trial_number: index + 1, stimulus_id: s.id, sentence_id: s.sentence_id, speaker_id: s.speaker_id, condition: s.condition, audio_file: s.audio, audio_sha256: s.sha256, audio_sample_rate_hz: s.sample_rate || '', audio_frames: s.frames || '', reference_kana: s.reference_kana || '', reference_status: s.reference_status, trial_status: 'in_progress', response: '', audio_completed: false};
   markTime(current, 'trial_opened', stamp);
   session.trials.push(current);
   composing = false;
@@ -254,10 +255,21 @@ window.addEventListener('beforeunload', event => {
   if (active()) { event.preventDefault(); event.returnValue = ''; }
 });
 
-$('setup').onsubmit = event => {
+$('setup').onsubmit = async event => {
   event.preventDefault();
-  try { participantId($('participant').value); participantName($('participant-name').value); $('error').textContent = ''; screen('instructions'); }
+  if ($('setup-next').disabled) return;
+  $('setup-next').disabled = true;
+  try {
+    const id = participantId($('participant').value);
+    participantName($('participant-name').value);
+    $('error').textContent = '';
+    selectedList = participantList(manifest, id);
+    await prepareAudio([...practice.stimuli, ...selectedList.stimuli]);
+    preparedId = id;
+    screen('instructions');
+  }
   catch (error) { $('error').textContent = error.message; }
+  finally { $('setup-next').disabled = false; }
 };
 $('check-sound').onclick = () => {
   const context = new AudioContext();
@@ -278,8 +290,9 @@ $('begin').onclick = async () => {
   let id, name;
   try { id = participantId($('participant').value); name = participantName($('participant-name').value); }
   catch (error) { $('error').textContent = error.message; screen('welcome'); $('begin').disabled = false; return; }
+  if (id !== preparedId) { screen('welcome'); $('error').textContent = '参加者IDを確認して「次へ」を押してください。'; return; }
   const stamp = captureTime();
-  session = {id: crypto.randomUUID(), participant_id: id, participant_name: name, app_version: VERSION, manifest, manifest_sha256: manifestHash, practice, practice_sha256: practiceHash, practice_order: practice.stimuli.map(s => s.id), phase: 'practice', order: makeOrder(manifest.stimuli, id, manifest.version), seed: `${manifest.version}:order:${id}`, trials: [], status: 'running', started_at_utc: stamp.system_utc, user_agent: navigator.userAgent, time_origin_ms: performance.timeOrigin, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, timezone_offset_minutes: new Date(stamp.system_epoch_ms).getTimezoneOffset(), timing_version: 'dual-clock-media-v1', log_version: 'value-reference-v1'};
+  session = {id: crypto.randomUUID(), participant_id: id, participant_name: name, app_version: VERSION, manifest, manifest_sha256: manifestHash, counterbalance_list: selectedList.id, counterbalance_version: manifest.counterbalance_version, practice, practice_sha256: practiceHash, practice_order: practice.stimuli.map(s => s.id), phase: 'practice', order: makeOrder(selectedList.stimuli, id, manifest.version), seed: `${manifest.version}:order:${id}`, trials: [], status: 'running', started_at_utc: stamp.system_utc, user_agent: navigator.userAgent, time_origin_ms: performance.timeOrigin, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, timezone_offset_minutes: new Date(stamp.system_epoch_ms).getTimezoneOffset(), timing_version: 'dual-clock-media-v1', log_version: 'value-reference-v1'};
   markTime(session, 'started', stamp);
   log('session_started', {}, undefined, stamp);
   await pending;
@@ -342,9 +355,17 @@ async function init() {
   const practiceBytes = await practiceResponse.arrayBuffer();
   practiceHash = await hash(practiceBytes);
   practice = validatePractice(JSON.parse(new TextDecoder().decode(practiceBytes)), manifest);
+  $('loading').hidden = true;
+  $('setup-next').disabled = false;
+}
+
+async function prepareAudio(stimuli) {
   let loaded = 0;
-  // Limit concurrent downloads while preparing every file before the first trial.
-  const remaining = [...practice.stimuli, ...manifest.stimuli];
+  $('loading').hidden = false;
+  for (const url of assets.values()) URL.revokeObjectURL(url);
+  assets.clear();
+  // Prepare only this participant's 10 anchors and 48 assigned recordings.
+  const remaining = [...stimuli];
   const totalAudio = remaining.length;
   await Promise.all(Array.from({length: 4}, async () => {
     while (remaining.length) {
@@ -359,6 +380,5 @@ async function init() {
   }));
   $('loading').textContent = '';
   $('loading').hidden = true;
-  $('setup-next').disabled = false;
 }
 init().catch(error => { $('error').textContent = `準備を完了できませんでした。実験者にお知らせください。\n${error.message}`; });

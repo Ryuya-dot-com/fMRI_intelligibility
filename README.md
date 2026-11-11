@@ -1,6 +1,6 @@
 # スキャナー外のintelligibility書き起こし課題
 
-2026-11-04。研究室PCのブラウザーで行う、GitHub Pages向けの静的HTML/JavaScriptです。現行のMRI課題とは独立しています。公開先は [Ryuya-dot-com/fMRI_intelligibility](https://github.com/Ryuya-dot-com/fMRI_intelligibility)、利用URLは https://ryuya-dot-com.github.io/fMRI_intelligibility/ です。
+2026-11-11更新。研究室PCのブラウザーで行う、GitHub Pages向けの静的HTML/JavaScriptです。現行のMRI課題とは独立しています。公開先は [Ryuya-dot-com/fMRI_intelligibility](https://github.com/Ryuya-dot-com/fMRI_intelligibility)、利用URLは https://ryuya-dot-com.github.io/fMRI_intelligibility/ です。
 
 ## 開く
 
@@ -10,43 +10,56 @@
 python3 -m http.server 8767 --bind 127.0.0.1 --directory site
 ```
 
-ファイルをダブルクリックする `file://` では実行できません。最初の画面には参加者ID・参加者名の欄と「次へ」だけを表示します。説明・音量確認の後に練習4問を開始します。練習終了後の「本番を始める」で36問へ進みます。仮音声を用いた動作確認にはテスト用IDと「動作確認用」等の架空名を使い、実参加者と区別してください。音量確認は短い確認音です。
+ファイルをダブルクリックする `file://` では実行できません。最初の画面には参加者ID・参加者名の欄と「次へ」だけを表示します。説明・音量確認の後に練習10問を開始します。練習終了後の「本番を始める」で48問へ進みます。動作確認にはテスト用IDと「動作確認用」等の架空名を使い、実参加者と区別してください。音量確認は短い確認音です。
 
 ## 採用した仕様
 
 - 日本語音声を書き取る。ひらがな・カタカナ・漢字を許容し、回答原文と採点用の読みを分ける。空欄も提出でき、時間制限なし。入力は音声の `playing` イベントから有効、次へ進めるのは `ended` 後。各音声1回、前の試行へ戻れない。
-- 36種類の文を各1回、12話者から各3音声。Japanese・Asian・Romanceは各4話者・12音声。条件名は参加者画面には表示しない。
-- 同じ条件の3連続を禁止し、先頭条件を固定しない。参加者番号と刺激版から順序を再現する（001と1は同じ）。話者の連続は禁止していない。文と話者の組合せは現時点では刺激表で固定。参加者間の組合せのカウンターバランスは未採用で、本番刺激選定時に決定する。
-- 練習4本と本番36本を開始前に取得しSHA-256を確認。外部CDN・サーバーへの参加者ID・氏名・回答送信・アクセス解析なし。配信元への通常のページ・音声取得通信は発生する。
+- MRIで採用した288録音を6リストに分け、1人には48種類の文を各1回、12話者から各4音声提示する。Japanese・Asian・Romanceは各4話者・16音声。条件名・リスト番号は参加者画面には表示しない。
+- 同じ条件の3連続を禁止し、先頭条件を固定しない。参加者番号と刺激版から順序を再現する（001と1は同じ）。話者の連続は禁止していない。文と話者の組合せは6リストでカウンターバランスする。MRIとは別の参加者が受験する。
+- ID入力後、その人の共通アンカー10本と本番48本だけを開始前に取得しSHA-256を確認。外部CDN・サーバーへの参加者ID・氏名・回答送信・アクセス解析なし。配信元への通常のページ・音声取得通信は発生する。
 - キー押下・解放、修飾キー、繰返し、入力・削除、IMEの開始・更新・確定、貼付・切取り・ドロップ、選択範囲、回答欄のフォーカス、ページ表示状態、音声・提出時刻を記録する。回答欄外の文字入力を収集する仕組みではない。
 - Enterで次へ進まない。IME変換中は「次へ」を無効にする。漢字・カタカナ・英数字を含む回答も提出できる。2000文字を上限とし、制御文字は拒否する。漢字等の読みが未確定なら採点を保留し、0点にはしない。入力中の文字列は元のまま保持する。参加者ID・氏名欄のキーストロークは収集しない。
 
-## 練習セッション
+## 6リストの割当てと提示順
 
-練習は次の固定順の4文で、本番とは別の音声・文IDを使用します。公式Pythonパッケージ `kokoro==0.9.4` の `KPipeline(lang_code='j')` と非量子化Kokoro-82M v1.0（PyTorch float32・CPU）、日本語音声 `jf_alpha` で再生成しています。24 kHz・24 bit PCM WAVで保存し、圧縮・ノイズ除去・音量正規化・無音切除は加えていません。以前の量子化ONNX版はユーザーからノイズの指摘があり、今回の音声へ差し替えました。ノイズの原因を量子化だけと断定したものではありません。画面には文の正答・得点を出さず、本番と同じ再生・入力・次への操作を練習します。開始前の例文表示や再生し直しは行いません。
+[全6リストのCSV](lists/all_six_lists.csv) と [list_1.csv](lists/list_1.csv)～[list_6.csv](lists/list_6.csv) を出力しています。各CSVの提示順は参加者ID 1～6の実際の順序です。ID 7以降は同じ割当てリストを使い、ID全体をseedにするためリスト内の提示順が変わります。実施時の予定は各参加者のZIP内 `schedule.csv` を参照してください。
 
-| 順 | 例文 | 正答の読み | モーラ数 |
-| --- | --- | --- | ---: |
-| 1 | 明日は友達と公園まで歩きます。 | あしたはともだちとこうえんまであるきます | 20 |
-| 2 | 机の上にきれいな花を飾りました。 | つくえのうえにきれいなはなをかざりました | 20 |
-| 3 | 駅の近くでおいしいパンを買ってきます。 | えきのちかくでおいしいぱんをかってきます | 20 |
-| 4 | 弟は部屋で静かに本を読んでいた。 | おとうとはへやでしずかにほんをよんでいた | 20 |
+| 項目 | 仕様 |
+| --- | --- |
+| リスト番号 | `(参加者ID − 1) mod 6 + 1`。1→1、6→6、7→1 |
+| 各リスト | 異なる48文、12話者各4文、各条件16文 |
+| 6リスト全体 | MRIの288録音を各1回。各文は6名の異なる話者により1リスト1回 |
+| 作成方法 | 元のB1/B2・P1/P2を維持し、各12文を固定seedで並べて6話者の割当てを循環。各話者の4文はP1/P2各2文 |
+| 提示順 | ID全体と刺激版に依存する疑似乱数。同一条件3連続を含む候補は棄却。先頭条件は固定しない |
+| 共通アンカー | 全員同じ10録音を同じ順で実施。本番の文・録音とは重複しない |
 
-`site/practice.json` に正答・手作業のモーラ分割・音声ハッシュを登録し、起動時も20モーラを検査します。[生成スクリプト](tools/generate_practice.py) と [読み・合成の記録](tools/practice_audio_provenance.json) にOpen JTalkによる独立した読み解析（4文とも20モーラ）を残しています。音声生成とテキスト・読みのモーラ数確認であり、波形から個々のモーラを手作業で分節した記録ではありません。
+6人ずつ各リストへ同数を割り当てると、各録音の予定提示回数が等しくなります。人数が6の倍数でない場合・欠番・除外がある場合の均衡を自動補正する機能はありません。IDを同一人物以外に再利用しないでください。リスト番号・割当て版・ID・seed・音声ハッシュを記録します。三連続禁止は本番48試行内に適用し、説明画面を挟む練習との境界には適用しません。
 
-練習追加によって本番36音声の割当て・提示順・seedは変わりません。同条件3連続の禁止は本番36試行内へ適用し、練習との境界は含めません。練習の入力・得点もCSVへ残しますが、本番のintelligibility集計には含めません。
+## 全員共通の練習・アンカー10音声
 
-## 仮音声と本番への差し替え
+既存MRI練習専用の10録音を [common_anchors.csv](lists/common_anchors.csv) の固定順で使います。各録音1回、時間制限なし、本番と同じ入力操作です。正答や得点は参加者画面に表示しません。`phase=practice`、`role=common_anchor`、`anchor_version` で識別し、本番成績から分離して集計します。以前のKokoro日本語合成音声4文は使用しません。
 
-`site/audio/` の本番枠36本はKokoro v1.0で生成した英語の確認用WAVです。例は “Japanese one. Sentence one.”。12種類の合成音声を話者枠へ割り当てています。Japanese・Asian・Romanceの訛りを合成したものではなく、36の実験文の代わりになる材料でもありません。英語の確認用音声には日本語のモーラ得点を計算せず、`placeholder_not_scored` とします。回答操作の確認時は、任意の書き起こしを入力できます。
+**正答の現在地：** 指定された `Experiment/stimuli.csv` の練習10行には `sentence_text` と `moras` が登録されていません。音声と回答は保存できますが、現時点の練習得点は `pending_reference`（空欄）です。未登録の正答を推測したり、0点に置き換えたりしません。下記の正答確認表に読みを登録すれば、保存済み回答も採点できます。全員共通の項目と別集計を提供する実装であり、アンカーによる能力補正・尺度等化や、10項目の測定特性を検証したものではありません。
 
-生成処理は [tools/generate_placeholders.py](tools/generate_placeholders.py)、使用モデルとパッケージの記録は [tools/audio_provenance.json](tools/audio_provenance.json)。既存WAVがある場所へ生成スクリプトを再実行しても上書きしません。モデルは一時環境で生成時だけ使い、ブラウザーへのモデル配布や実験中の音声合成は行いません。
+## MRI音声・正答の出典
 
-本番刺激が決まったら `site/stimuli.json` の `mode` を `study` にし、`version` を更新します。36件すべてのWAV、SHA-256、文ID・話者ID・条件、`reference_kana` を登録してください。正答は実際に採点対象とする発話を確認して定め、録音の言い間違い等を台本から黙って補正しません。各文は重複不可。音声URLは `audio/ファイル名.wav` とし、同じ公開フォルダへ置きます。検査は未登録の正答、重複文、話者・条件の本数不一致、音声不一致を検出すると開始を止めます。
+`tools/prepare_mri.py` が `Experiment/stimuli.csv` の本番288・練習10を読み、登録済みSHA-256を検査してMRI用 `audio/prepared/` のWAVをそのままコピーします。追加の音量正規化・圧縮・無音切除・再合成は行いません。公開については2026-11-11にユーザーが288本を含めて許可しています。MRI側の刺激表・音声・撮像処理は変更しません。
+
+本番48文の読みは `Experiment/materials/FINAL_list of selected sentences.xlsx` の `FINAL_B1+B2` シートから取得し、刺激表の本文と照合しています。これは台本の読みであり、各録音での読み間違い・脱落等を聴取確認した正答ではありません。`reference_status=script_unverified` とし、かな回答の暫定得点は `score_status=review_reference` にします。未確認の暫定得点を確定集計へ混ぜません。正答の確認は録音単位で行い、実際の発話に合わせて確定してください。
+
+ローカルで刺激を再作成するコマンド（元のMRIフォルダーが必要）：
+
+```sh
+python3 tools/prepare_mri.py
+node tools/export_lists.mjs
+```
+
+`tools/export_lists.mjs` は生成用のCSVを再出力するため、手入力した確認表は別名で保存してください。旧ソース・40合成音声・検証記録はローカルの `design_history/v4/` と公開リポジトリの旧commitに保持しています。
 
 ## モーラ採点の規則
 
-`correct_mora_count / reference_mora_count` を試行ごとに計算します。分母は正答の全モーラ数で、聞き取って入力した範囲の長さではありません。空欄で提出した回答は0。未提示・中断・仮音声・読み未確定は0点にせず得点を空欄にします。
+`correct_mora_count / reference_mora_count` を試行ごとに計算します。分母は正答の全モーラ数で、聞き取って入力した範囲の長さではありません。正答が登録済みの音声で空欄を提出した回答は0。未提示・中断・仮音声・読み未確定・正答未登録は0点にせず得点を空欄にします。台本に基づく暫定得点は `review_reference` として確定集計から分けます。
 
 1. 元の回答は閲覧用の `response` と厳密な復元用の `response_json` に保存する。採点用の読みではUnicodeをNFCに正規化し、半角かなを全角、通常のカタカナをひらがなへ変換して空白と指定の句読点を除去する。漢字・数字・英字等は推測変換せず `pending_reading` とする。`response_reading`・`reading_status`・`reading_method`・`reading_version` を別に保存する。
 2. 小さい「ゃゅょぁぃぅぇぉゎ」は直前のかなと合わせて1モーラ。「っ」「ん」「ー」は各1モーラ。「きょう」は「きょ・う」、「がっこう」は「が・っ・こ・う」。不正な先頭の小書きかな等は人手確認扱い。
@@ -63,7 +76,7 @@ python3 -m http.server 8767 --bind 127.0.0.1 --directory site
 | ZIP内のファイル | 内容 |
 | --- | --- |
 | `session.json` | 参加者ID・氏名、session ID、実装・刺激・時計・記録形式の版、ハッシュ、刺激表、セッション状態。氏名はここだけ |
-| `schedule.csv` | 練習4試行＋本番36試行の予定。未提示も含む |
+| `schedule.csv` | 練習10試行＋本番48試行の予定。未提示も含む |
 | `trials.csv` | 実際に開いた試行だけを1試行1行で保存。回答原文・読み・採点状態、時刻、入力過程の集計値 |
 | `events.csv` | 全イベントを1件1行で保存。時刻、キー、IME、文字列参照、選択範囲など |
 
@@ -83,9 +96,10 @@ Node.js 22以降で、プロジェクトのルートから次を実行します�
 node tools/analyze.mjs /path/to/record1.zip /path/to/record2.zip --out results/initial
 ```
 
-`--out` の親ディレクトリーは事前に用意し、出力先には未作成のディレクトリーを指定してください。既存結果を上書きしません。ZIPを参加者ごとに読み、詳細イベントの照合後は試行表だけを保持します。出力は次の2個です。
+`--out` の親ディレクトリーは事前に用意し、出力先には未作成のディレクトリーを指定してください。既存結果を上書きしません。ZIPを参加者ごとに読み、詳細イベントの照合後は試行表だけを保持します。出力は次の3個です。
 
 - `analysis_trials.csv`：練習・中断・未採点も含む全観測試行。氏名なし。収集時の採点状態は `recorded_score_status` に保持。
+- `phase_summary.csv`：参加者・セッションごとにアンカーと本番を別行で集計。予定数、完了数、確定採点数、保留数、全問採点済みか、確定項目のモーラ加重正答率と項目平均正答率を出力。確定採点0件なら得点は空欄。
 - `readings_review.csv`：読みの確認が必要な完了回答。`response_json` を変更せず、`reviewed_reading` にかなの読み、`reviewer` に確認者、必要なら `note` に判断理由を入力。
 
 ```sh
@@ -94,7 +108,17 @@ node tools/analyze.mjs /path/to/record1.zip /path/to/record2.zip --readings resu
 
 読みを記入した行だけを採用します。session ID・通し試行番号・回答原文の一致を検査し、重複・別回答への適用・確認者なし・中断や仮音声の採点を拒否します。人手確認後は `reading_status=human_confirmed`。元ZIPは変更しません。回答の読みを正答に近づけて補うことはせず、曖昧なものは空欄のまま保留します。IMEログは補助情報であり、参加者が意図した読みの完全な記録ではありません。
 
-本番の分析対象候補は `phase=main`・`trial_status=completed`・`audio_completed=true` を確認します。`analysis_eligible_main` はさらに `score_status=automatic` を満たす採点済み行の目印で、参加者・試行の除外規則ではありません。未確定の読みと `review_alignment` を0点化・黙って除外せず、件数と内容を確認してから採用対象を決めてください。許容表記・長音・助詞は上の採点規則を適用します。
+### 正答の確認と保存済み回答の再採点
+
+[lists/references_review.csv](lists/references_review.csv) は本番288＋アンカー10の確認表です。確認済みの録音の行に `reviewed_reference_kana` と `reviewer` を記入し、別ファイルとして保存してください。`stimulus_id` と `audio_sha256` は変更しません。台本の読みは `script_kana` にあり、確認済み欄へ自動転記しません。録音の違いを無視して同じ文の別話者へ確認結果を流用しないでください。
+
+```sh
+node tools/analyze.mjs /path/to/record.zip --references /path/to/confirmed_references.csv --readings /path/to/confirmed_readings.csv --out results/confirmed
+```
+
+回答の読み確認が不要なら `--readings` は省略できます。正答確認表は全298録音を含んだまま使えます。音声ハッシュと刺激IDが一致した完了回答にだけ適用し、元ZIPは保持します。正答と回答の読みは独立に確認します。正答未登録でも回答の読みを先に確認できます。確認表からの正答差し替え時は、旧正答用の許容表記を引き継ぎません。
+
+本番の分析対象候補は `phase=main`・`trial_status=completed`・`audio_completed=true` を確認します。`analysis_eligible_anchor` は共通アンカー用の同等の目印です。`analysis_eligible_main` はさらに `score_status=automatic` を満たす採点済み行の目印で、参加者・試行の除外規則ではありません。未確定の読み・正答と `review_alignment` を0点化・黙って除外せず、件数と内容を確認してから採用対象を決めてください。許容表記・長音・助詞は上の採点規則を適用します。
 
 `trials.csv` にも、イベントから計算した次の指標を保存します（`metrics_version=input-process-v1`）。
 
@@ -148,7 +172,7 @@ node tools/analyze.mjs /path/to/record1.zip /path/to/record2.zip --readings resu
 
 ## GitHub Pagesへの配置
 
-指定リポジトリには `site/`・`tests/`・`tools/` とREADME・GitHub Actions設定を配置します。`.github/workflows/pages.yml` が `main` へのpush後にテストし、**`site/` の中身だけ**をPagesへ配信します。PagesのsourceはGitHub Actionsです。MRIフォルダ・実データ・CSVをアップロードする処理はありません。
+指定リポジトリには `site/`・`tests/`・`tools/` とREADME・GitHub Actions設定を配置します。`.github/workflows/pages.yml` が `main` へのpush後にテストし、**`site/` の中身だけ**をPagesへ配信します。PagesのsourceはGitHub Actionsです。MRI用WAVのコピー298本と作成した刺激リストを公開します。元のMRIフォルダーや参加者の実データ・結果ZIPは公開しません。
 
 `github-pages.zip` はサイト部分だけをまとめたローカル配布用です。公開URLでの確認と、実施用PCでの機器・日本語IMEの確認は区別します。
 
@@ -166,16 +190,10 @@ Kang, O., Thomson, R. I., & Moran, M. (2018). *Empirical approaches to measuring
 node --test tests/*.test.mjs
 ```
 
-ローカルの実施検証と範囲は `verification.json`、公開環境でのテスト・配信結果はGitHub Actionsに記録します。仮音声での動作確認と、本番刺激・実施用PCでの確認を区別します。
+ローカルの実施検証と範囲は `verification.json`、公開環境でのテスト・配信結果はGitHub Actionsに記録します。模擬入力テスト、実ブラウザーでの確認、研究室PC・実際の日本語IMEでの確認を区別します。
 
 参加者名は必須（前後空白を除去、100文字以内）で、端末のIndexedDBとZIP内のsession.jsonに保存します。ファイル名や音声取得URLへ氏名を含めません。旧記録の氏名は空欄のままとし、現在の入力から補いません。研究室PCではZIP回収後もブラウザー内に氏名を含む記録が残るため、施設の研究データ管理手順に従って扱ってください。
 
-## 練習音声の再生成
+## 旧合成音声の履歴
 
-[公式モデル](https://huggingface.co/hexgrad/Kokoro-82M) の `config.json`・`kokoro-v1_0.pth`・`voices/jf_alpha.pt` を、同じモデル用フォルダにファイル名を保って置きます（`jf_alpha.pt` もその直下）。音声生成用の独立したPython環境へ `tools/requirements.txt` をインストールし、次のように実行します。スクリプトは公式v1.0モデルのSHA-256を確認し、既存の出力フォルダへ上書きしません。
-
-```sh
-python tools/generate_practice.py --model-dir /path/to/kokoro82m --output /path/to/new-practice
-```
-
-出力の `audio/`・`practice.json` と検査記録を確認してから、サイトの対応ファイルを差し替えます。生成元は現行 `site/practice.json` の4文です。確認済み事項は有限サンプル・クリッピングなし・読み20モーラ・ハッシュの一致で、聴感上の無雑音や意図した発音すべての保証とは区別します。
+旧v4までの合成音声・生成処理はローカルの `design_history/v4/`、`tools/generate_practice.py`、`tools/generate_placeholders.py` と生成記録に保持しています。現行の298録音をこれらの生成処理で置き換えないでください。
