@@ -18,6 +18,11 @@ for (let id = 1; id <= 6; id++) {
 }
 await writeFile(new URL('lists/all_six_lists.csv', root), csv(all));
 await writeFile(new URL('lists/common_anchors.csv', root), csv(practice.stimuli.map((s, i) => ({trial_number: i + 1, ...s}))));
+// These supplied answer keys also score archives collected before references were registered.
+await writeFile(new URL('lists/anchor_references.csv', root), csv(practice.stimuli.filter(s => s.reference_status === 'verified').map(s => ({
+  stimulus_id: s.id, audio_sha256: s.sha256, reviewed_reference_kana: s.reference_kana,
+  reviewer: 'user_provided_key_kana_by_codex_20261111', note: s.reference_source,
+}))));
 await writeFile(new URL('lists/references_review.csv', root), csv([...practice.stimuli, ...manifest.stimuli].map(s => ({
   stimulus_id: s.id, audio_sha256: s.sha256, phase: s.condition === 'practice' ? 'practice' : 'main',
   sentence_id: s.sentence_id, script_text: s.text, script_kana: s.reference_kana,

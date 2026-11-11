@@ -83,8 +83,8 @@ test('mora segmentation handles contracted sounds, sokuon, nasal and long vowels
   assert.deepEqual(morae('きょう、がっこう。'), ['きょ', 'う', 'が', 'っ', 'こ', 'う']);
   assert.deepEqual(morae('しんぶんとこーひー'), ['し', 'ん', 'ぶ', 'ん', 'と', 'こ', 'ー', 'ひ', 'ー']);
   assert.deepEqual(morae('か\u3099'), ['が']);
-  assert.equal(validResponse('学校'), true);
-  assert.equal(validResponse('ガッコウ'), true);
+  assert.equal(validResponse('学校'), false);
+  assert.equal(validResponse('ガッコウ'), false);
   assert.throws(() => morae('ゃ'));
   assert.throws(() => morae('っゃ'));
 });
@@ -131,14 +131,14 @@ test('CSV separates scheduled, observed and event rows, and leaves unpresented t
 });
 
 
-test('mixed scripts preserve raw input, normalize only kana and defer uncertain readings', () => {
+test('legacy mixed-script scoring remains available after restricting new submissions', () => {
   for (const answer of ['ガッコウ', 'ｶﾞｯｺｳ', 'がっこう']) {
     const score = resultScore({reference_kana: 'がっこう'}, answer, 'study');
     assert.equal(score.proportion_correct, 1);
     assert.equal(score.response_reading, 'がっこう');
   }
   for (const answer of ['学校', '学校でパン', '123', 'abc']) {
-    assert.equal(validResponse(answer), true);
+    assert.equal(validResponse(answer), false);
     const score = resultScore({reference_kana: 'がっこう'}, answer, 'study');
     assert.equal(score.reading_status, 'needs_review');
     assert.equal(score.proportion_correct, undefined);
@@ -153,4 +153,9 @@ test('missing references and unverified script references are never final scores
   const provisional = resultScore({reference_kana: 'ねこ', reference_status: 'script_unverified'}, 'ねこ', 'study');
   assert.equal(provisional.proportion_correct, 1);
   assert.equal(provisional.score_status, 'review_reference');
+});
+
+test('new submissions accept only hiragana, long marks, punctuation and ordinary whitespace', () => {
+  for (const value of ['', 'きょうは ぱーてぃー。', 'ねこ、いぬ．とり,さかな.', 'か\u3099', 'あ\nい\tう　え', 'あ'.repeat(2000)]) assert.equal(validResponse(value), true, value);
+  for (const value of ['猫', 'ネコ', 'ﾈｺ', 'neko', '123', '１２３', 'ねこ😀', 'ねこ\u200b', '\uFEFFねこ', 'a\n', 'あ'.repeat(2001)]) assert.equal(validResponse(value), false, value);
 });

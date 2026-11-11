@@ -87,7 +87,7 @@ export function analyzeArchives(archives, readings = [], references = []) {
     if (seen.has(session.id)) throw new Error(`Duplicate session: ${session.id}`);
     seen.add(session.id);
     for (const trial of trials) {
-      const row = {...trial, counterbalance_list: session.counterbalance_list || '', anchor_version: session.practice?.version || '', recorded_score_status: trial.score_status, review_reviewer: '', review_note: '', reference_reviewer: ''};
+      const row = {...trial, response_format: session.response_format || '', counterbalance_list: session.counterbalance_list || '', anchor_version: session.practice?.version || '', recorded_score_status: trial.score_status, review_reviewer: '', review_note: '', reference_reviewer: ''};
       const review = reviews.get(key(trial));
       const source = trial.phase === 'practice' ? session.practice : session.manifest;
       const mode = trial.phase === 'practice' ? 'study' : session.manifest.mode;

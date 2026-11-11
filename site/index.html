@@ -24,7 +24,7 @@
     <section id="instructions" class="panel" hidden>
       <h1>課題の進め方</h1>
       <ol class="instructions">
-        <li><strong>聞こえた内容を入力してください。</strong><br>ひらがな・カタカナ・漢字のいずれでも構いません。音声が流れ始めたら、入力できます。</li>
+        <li><strong>聞こえた内容を、ひらがなで入力してください。</strong><br>日本語入力を「ひらがな」に切り替えてください。音声が流れ始めたら、入力できます。長音符「ー」・句読点・空白も使用できます。</li>
         <li><strong>聞き取れた部分だけでも入力してください。</strong><br>聞こえたことばを、できるだけそのまま書いてください。何も聞き取れなかった場合は、空欄のまま進めます。</li>
         <li><strong>入力が終わったら「次へ」を押してください。</strong><br>音声が終わると次へ進めます。時間制限はありません。前の音声や回答には戻れません。</li>
       </ol>
@@ -41,8 +41,8 @@
     <section id="task" class="panel" hidden>
       <p id="progress-text" class="progress-label"></p>
       <p id="audio-status" class="sr-only" role="status">音声を準備しています…</p>
-      <label for="response" class="sr-only">聞こえた内容を入力してください</label>
-      <textarea id="response" rows="5" maxlength="2000" placeholder="聞こえた内容を入力してください" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" aria-describedby="response-error" disabled></textarea>
+      <label for="response" class="sr-only">聞こえた内容をひらがなで入力してください</label>
+      <textarea id="response" rows="5" maxlength="2000" lang="ja" inputmode="text" placeholder="聞こえた内容をひらがなで入力してください" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off" aria-describedby="response-error" disabled></textarea>
       <p id="response-error" class="error" role="alert"></p>
       <div class="actions"><button id="stop" class="text-button">中断する</button><button id="next" disabled>次へ</button></div>
       <button id="retry-play" class="secondary" hidden>音声を開始する</button>

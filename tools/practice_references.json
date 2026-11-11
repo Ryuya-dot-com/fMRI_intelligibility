@@ -1,0 +1,82 @@
+{
+  "PRACTICE_KYO_F03_Greek_B2_020": {
+    "text": "盲導犬のポチが、冒険にでた。",
+    "kana": "もうどうけんのぽちがぼうけんにでた",
+    "moras": 17,
+    "status": "verified",
+    "source": "User-supplied answer key, 2026-11-11; text matched to Experiment/stimuli.csv; kana prepared by Codex (not an independent auditory verification).",
+    "audio_sha256": "7a5f2e5b39c9d92d6be434f45610c872158f237d502ee755e5bf508d6da353c1"
+  },
+  "PRACTICE_KYO_M15_Arabic_B1_015": {
+    "text": "焚き火をずっと見ていると、じゅっと音がした。",
+    "kana": "たきびをずっとみているとじゅっとおとがした",
+    "moras": 20,
+    "status": "verified",
+    "source": "User-supplied answer key, 2026-11-11; text matched to Experiment/stimuli.csv; kana prepared by Codex (not an independent auditory verification).",
+    "audio_sha256": "686c9321f0d03d193c2c0e88413d6ebcc8211cf2725aea94710ffb0b7185f81d"
+  },
+  "PRACTICE_OSA_F01_Sinhala_B1_079": {
+    "text": "日食を見るために、立食パーティーをする。",
+    "kana": "にっしょくをみるためにりっしょくぱーてぃーをする",
+    "moras": 21,
+    "status": "verified",
+    "source": "User-supplied answer key, 2026-11-11; text matched to Experiment/stimuli.csv; kana prepared by Codex (not an independent auditory verification).",
+    "audio_sha256": "02d688959640e2be05604fcbdefd5af7e13db17a68a23d596b77616bf134dcde"
+  },
+  "PRACTICE_RIT_M03_JP_B1_093": {
+    "text": "市内から、市街へ出る。",
+    "kana": "しないからしがいへでる",
+    "moras": 11,
+    "status": "verified",
+    "source": "User-supplied answer key, 2026-11-11; text matched to Experiment/stimuli.csv; kana prepared by Codex (not an independent auditory verification).",
+    "audio_sha256": "9d77bf973a9303bbfd00513edccd4939561149ed4f6656de87ff29eb7e91f2bc"
+  },
+  "PRACTICE_TOH_F06_JP_B1_091": {
+    "text": "佐渡で、茶道を習った。",
+    "kana": "さどでさどうをならった",
+    "moras": 11,
+    "status": "verified",
+    "source": "User-supplied answer key, 2026-11-11; text matched to Experiment/stimuli.csv; kana prepared by Codex (not an independent auditory verification).",
+    "audio_sha256": "1734911e6a3659864c9ecb741cafcac0345b615ad3636d3690e8c72a10405e88"
+  },
+  "PRACTICE_KYO_F03_Russian_B1_045": {
+    "text": "手紙を一通書いたら、胃痛がひどくなった。",
+    "kana": "てがみをいっつうかいたらいつうがひどくなった",
+    "moras": 22,
+    "status": "verified",
+    "source": "User-supplied answer key, 2026-11-11; text matched to Experiment/stimuli.csv; kana prepared by Codex (not an independent auditory verification).",
+    "audio_sha256": "ae83c097dccfc784c238872d32dd947a558206cb50d50d67396614bad335fd59"
+  },
+  "PRACTICE_KYO_M04_JP_B2_014": {
+    "text": "画匠たちが、合唱を練習している。",
+    "kana": "がしょうたちががっしょうをれんしゅうしている",
+    "moras": 19,
+    "status": "verified",
+    "source": "User-supplied answer key, 2026-11-11; text matched to Experiment/stimuli.csv; kana prepared by Codex (not an independent auditory verification).",
+    "audio_sha256": "fee1963066c1229238c409e650d1622488a1946ae6a2dcd565fea55c11989f89"
+  },
+  "PRACTICE_TOH_F07_JP_B1_101": {
+    "text": "果樹の前で、歌手と写真を撮る。",
+    "kana": "かじゅのまえでかしゅとしゃしんをとる",
+    "moras": 15,
+    "status": "verified",
+    "source": "User-supplied answer key, 2026-11-11; text matched to Experiment/stimuli.csv; kana prepared by Codex (not an independent auditory verification).",
+    "audio_sha256": "6d630d75671a1278d565f3404be8d8eb836a4f41100e61192e14e165724d8891"
+  },
+  "PRACTICE_TOH_M03_Sundanese_B1_037": {
+    "text": "偽名を記名した。",
+    "kana": "ぎめいをきめいした",
+    "moras": 9,
+    "status": "verified",
+    "source": "User-supplied answer key, 2026-11-11; text matched to Experiment/stimuli.csv; kana prepared by Codex (not an independent auditory verification).",
+    "audio_sha256": "8dc619db6b5af0d421110093cd5b62e2494cc8e9c39f26e91f33da28d26f6017"
+  },
+  "PRACTICE_TOH_M07_Azerbaijani_B1_051": {
+    "text": "別荘を持つなど、めっそうもない。",
+    "kana": "べっそうをもつなどめっそうもない",
+    "moras": 16,
+    "status": "verified",
+    "source": "User-supplied answer key, 2026-11-11; text matched to Experiment/stimuli.csv; kana prepared by Codex (not an independent auditory verification).",
+    "audio_sha256": "10518b869925de5f64e7f809e495240022834242b471d33b173774156caa429a"
+  }
+}

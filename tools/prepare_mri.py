@@ -50,9 +50,10 @@ def main():
     assert len({r['sentence_id'] for r in main_rows}) == 48
     assert not {r['sentence_id'] for r in main_rows} & {r['sentence_id'] for r in practice_rows}
     references = script_references(workbook)
-    # This small input file can hold verified references without editing MRI materials.
+    # Accepted answer keys are tied to the specific recording, independently of MRI metadata.
     practice_reference_path = ROOT / 'tools/practice_references.json'
     practice_references = json.loads(practice_reference_path.read_text()) if practice_reference_path.exists() else {}
+    assert not set(practice_references) - {r['stimulus_id'] for r in practice_rows}, 'Unknown anchor reference'
     all_stimuli = []
     for row in rows:
         source = MRI / row['audio_file']
@@ -66,8 +67,10 @@ def main():
         with wave.open(str(source)) as wav:
             rate, frames, channels = wav.getframerate(), wav.getnframes(), wav.getnchannels()
         ref = references.get(row['sentence_id'], {}) if row['phase'] == 'main' else practice_references.get(row['stimulus_id'], {})
-        if row['phase'] == 'main':
+        if row['phase'] == 'main' or ref:
             assert re.sub(r'\s+', '', ref['text']) == re.sub(r'\s+', '', row['sentence_text'])
+        if row['phase'] == 'practice' and ref:
+            assert ref['audio_sha256'] == sha, f"Reference belongs to different audio: {row['stimulus_id']}"
         all_stimuli.append({
             'id': row['stimulus_id'], 'sentence_id': row['sentence_id'], 'speaker_id': row['speaker_id'],
             'condition': GROUPS[row['language_group']] if row['phase'] == 'main' else 'practice',
@@ -107,7 +110,7 @@ def main():
     manifest = {'version': VERSION, 'mode': 'study', 'counterbalance_version': VERSION,
                 'source_stimuli_sha256': digest(table), 'reference_workbook_sha256': digest(workbook),
                 'lists': lists, 'stimuli': stimuli}
-    practice = {'version': 'shared-human-anchors-10-v1', 'role': 'common_anchor', 'order_policy': 'fixed_for_all_participants', 'stimuli': anchors}
+    practice = {'version': 'shared-human-anchors-10-v2', 'role': 'common_anchor', 'order_policy': 'fixed_for_all_participants', 'stimuli': anchors}
     for filename, data in [('stimuli.json', manifest), ('practice.json', practice)]:
         (ROOT / 'site' / filename).write_text(json.dumps(data, ensure_ascii=False, indent=2) + '\n')
     print(json.dumps({'main_recordings': len(stimuli), 'lists': len(lists), 'items_per_list': 48,

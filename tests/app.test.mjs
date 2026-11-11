@@ -9,6 +9,7 @@ import {sessionMetadata} from '../site/storage.mjs';
 
 const source = readFileSync(new URL('../site/app.mjs', import.meta.url), 'utf8').replace(/^import .*;\n/gm, '');
 const manifestText = readFileSync(new URL('../site/stimuli.json', import.meta.url), 'utf8');
+const practice = JSON.parse(readFileSync(new URL('../site/practice.json', import.meta.url), 'utf8'));
 const html = readFileSync(new URL('../site/index.html', import.meta.url), 'utf8');
 const ids = new Set([...html.matchAll(/id="([^"]+)"/g)].map(match => match[1]));
 const tick = async () => { for (let i = 0; i < 12; i++) await new Promise(setImmediate); };
@@ -121,7 +122,7 @@ test('10 practice + 48 main trials: gates, phase transition, identity and CSV se
   assert.equal(rows.filter(r => r.row_type === 'trial' && r.phase === 'main').length, 48);
   assert.equal(rows.filter(r => r.row_type === 'trial' && r.phase === 'practice').length, 10);
   assert.equal(rows.filter(r => r.row_type === 'schedule').length, 58);
-  assert.equal(rows.filter(r => r.row_type === 'trial' && r.phase === 'practice' && r.score_status === 'pending_reference').length, 10);
+  assert.equal(rows.filter(r => r.row_type === 'trial' && r.phase === 'practice' && ['automatic', 'review_alignment'].includes(r.score_status)).length, 10);
   assert.equal(rows.filter(r => r.row_type === 'trial' && r.phase === 'main' && r.score_status === 'review_reference').length, 48);
   assert.equal(session.trials[10].trial_number, 1);
   assert.equal(session.trials[10].session_trial_number, 11);
@@ -186,20 +187,41 @@ test('system milliseconds, monotonic clocks, browser queue delay and audio posit
   assert.equal(session.trials[1].interrupted_system_epoch_ms, session.completed_system_epoch_ms);
 });
 
-test('kanji is accepted pending reading review, empty submitted answer is preserved', async () => {
+test('IME composition stays editable; committed non-hiragana cannot be submitted', async () => {
   const h = await harness(); await h.start(); h.media.end();
+  assert.equal(h.saved.response_format, 'hiragana-v1');
+  h.el('response').emit('compositionstart');
+  h.el('response').value = 'kyo';
+  h.el('response').emit('input', {data: 'kyo', inputType: 'insertCompositionText', isComposing: true});
+  assert.equal(h.el('next').disabled, true);
+  assert.equal(h.el('response-error').textContent, '');
+  assert.equal(h.el('response').value, 'kyo', 'composition is not deleted or transliterated');
   h.el('response').value = '今日';
+  h.el('response').emit('compositionend', {data: '今日'});
+  assert.equal(h.el('next').disabled, true);
+  assert.match(h.el('response-error').textContent, /ひらがな/);
   await h.el('next').onclick();
+  assert.equal(h.media.plays, 1);
+  for (const value of ['ガッコウ', 'ｶﾞｯｺｳ', 'abc', '１２３', '123', 'ねこ😀']) {
+    h.el('response').emit('paste');
+    h.el('response').value = value;
+    h.el('response').emit('input', {data: value, inputType: 'insertFromPaste', isComposing: false});
+    assert.equal(h.el('next').disabled, true);
+    assert.equal(h.el('response').value, value, 'rejected text remains available for correction and logging');
+    await h.el('next').onclick();
+    assert.equal(h.media.plays, 1);
+  }
+  h.el('response').value = 'きょう、ぱーてぃー。';
+  h.el('response').emit('input', {data: 'きょう、ぱーてぃー。', inputType: 'insertText', isComposing: false});
+  assert.equal(h.el('next').disabled, false);
+  assert.equal(h.el('response-error').textContent, '');
+  await h.el('next').onclick(); await tick();
+  assert.equal(h.saved.trials[0].response, 'きょう、ぱーてぃー。');
   assert.equal(h.media.plays, 2);
-  assert.equal(h.saved.trials[0].response, '今日');
-  assert.equal(h.saved.trials[0].score_status, 'pending_reference');
-  assert.equal(h.saved.trials[0].proportion_correct, undefined);
   h.media.end();
-  h.el('response').value = '';
   await h.el('next').onclick(); await tick();
   assert.equal(h.saved.trials[1].response, '');
-  assert.equal(h.saved.trials[1].proportion_correct, undefined);
-  assert.equal(h.media.plays, 3);
+  assert.equal(h.saved.trials[1].proportion_correct, 0);
 });
 
 test('aborting during audio records incomplete audio and skips scoring', async () => {
@@ -249,7 +271,7 @@ test('reload preserves prior response and marks it interrupted without replay', 
   assert.equal(s.trials[0].phase, 'practice');
 });
 
-test('blank participant name blocks audio and setup; anchor with no reference preserves the answer without a fabricated score', async () => {
+test('blank participant name blocks setup; the registered anchor key is scored', async () => {
   const h = await harness(); await h.start('   ');
   assert.equal(h.media.plays, 0);
   assert.equal(h.el('welcome').hidden, false);
@@ -257,10 +279,10 @@ test('blank participant name blocks audio and setup; anchor with no reference pr
   h.el('error').textContent = '';
   await h.start();
   h.media.end();
-  h.el('response').value = 'あしたはともだちとこうえんまであるきます';
+  h.el('response').value = practice.stimuli[0].reference_kana;
   await h.el('next').onclick(); await tick();
-  assert.equal(h.saved.trials[0].correct_mora_count, undefined);
-  assert.equal(h.saved.trials[0].proportion_correct, undefined);
+  assert.equal(h.saved.trials[0].correct_mora_count, core.morae(practice.stimuli[0].reference_kana).length);
+  assert.equal(h.saved.trials[0].proportion_correct, 1);
 });
 
 
@@ -287,11 +309,11 @@ test('name entry has no input listeners; unchanged text uses references without 
 
 test('submission freezes the saved answer while the storage queue completes', async () => {
   const h = await harness(); await h.start(); h.media.end();
-  h.el('response').value = 'ガッコウ';
+  h.el('response').value = 'がっこう';
   const submitting = h.el('next').onclick();
   assert.equal(h.el('response').disabled, true);
   h.el('response').value = '別の回答'; h.el('response').emit('input');
   await submitting; await tick();
-  assert.equal(h.saved.trials[0].response, 'ガッコウ');
+  assert.equal(h.saved.trials[0].response, 'がっこう');
   assert.equal(h.saved.trials[0].response_reading, 'がっこう');
 });

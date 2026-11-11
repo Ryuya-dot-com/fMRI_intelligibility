@@ -11,6 +11,7 @@ let composing = false, advancing = false, checkPlayed = false;
 let releaseLock, lastValueJson, lastValueSeq;
 let preparedId, selectedList;
 const assets = new Map();
+const responseError = 'ひらがなで入力してください。漢字・カタカナ・英数字は使えません（長音符「ー」・句読点・空白は使用できます。2000文字以内）。';
 function captureTime() {
   const perf_ms = performance.now();
   const system_epoch_ms = Date.now();
@@ -73,7 +74,9 @@ function log(type, details = {}, browserEvent, stamp = captureTime()) {
 }
 
 function nextEnabled() {
-  $('next').disabled = !active() || !current?.audio_ended_perf_ms || composing || advancing || $('stop-dialog').open;
+  const invalid = !validResponse($('response').value);
+  $('next').disabled = !active() || !current?.audio_ended_perf_ms || composing || advancing || $('stop-dialog').open || invalid;
+  $('response-error').textContent = active() && current && !composing && invalid ? responseError : '';
 }
 
 function inputDetails(event) {
@@ -181,7 +184,7 @@ function startTrial() {
 async function next() {
   if ($('next').disabled || advancing) return;
   if (!validResponse($('response').value)) {
-    $('response-error').textContent = '回答は2000文字以内で入力してください。使用できない制御文字が含まれていないか確認してください。';
+    nextEnabled();
     log('validation_rejected');
     $('response').focus();
     return;
@@ -292,7 +295,7 @@ $('begin').onclick = async () => {
   catch (error) { $('error').textContent = error.message; screen('welcome'); $('begin').disabled = false; return; }
   if (id !== preparedId) { screen('welcome'); $('error').textContent = '参加者IDを確認して「次へ」を押してください。'; return; }
   const stamp = captureTime();
-  session = {id: crypto.randomUUID(), participant_id: id, participant_name: name, app_version: VERSION, manifest, manifest_sha256: manifestHash, counterbalance_list: selectedList.id, counterbalance_version: manifest.counterbalance_version, practice, practice_sha256: practiceHash, practice_order: practice.stimuli.map(s => s.id), phase: 'practice', order: makeOrder(selectedList.stimuli, id, manifest.version), seed: `${manifest.version}:order:${id}`, trials: [], status: 'running', started_at_utc: stamp.system_utc, user_agent: navigator.userAgent, time_origin_ms: performance.timeOrigin, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, timezone_offset_minutes: new Date(stamp.system_epoch_ms).getTimezoneOffset(), timing_version: 'dual-clock-media-v1', log_version: 'value-reference-v1'};
+  session = {id: crypto.randomUUID(), participant_id: id, participant_name: name, app_version: VERSION, response_format: 'hiragana-v1', manifest, manifest_sha256: manifestHash, counterbalance_list: selectedList.id, counterbalance_version: manifest.counterbalance_version, practice, practice_sha256: practiceHash, practice_order: practice.stimuli.map(s => s.id), phase: 'practice', order: makeOrder(selectedList.stimuli, id, manifest.version), seed: `${manifest.version}:order:${id}`, trials: [], status: 'running', started_at_utc: stamp.system_utc, user_agent: navigator.userAgent, time_origin_ms: performance.timeOrigin, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, timezone_offset_minutes: new Date(stamp.system_epoch_ms).getTimezoneOffset(), timing_version: 'dual-clock-media-v1', log_version: 'value-reference-v1'};
   markTime(session, 'started', stamp);
   log('session_started', {}, undefined, stamp);
   await pending;

@@ -2,7 +2,7 @@
   "version": "mri-288-six-lists-v1",
   "mode": "study",
   "counterbalance_version": "mri-288-six-lists-v1",
-  "source_stimuli_sha256": "e4f6678cdb0bda970a5aeeacd3996cfc01693bdd93246ee4040782f70cf2915e",
+  "source_stimuli_sha256": "729ca65352b17065a8b5ec9f6bbfd0362d34259d63205475e81ad513ae9a7bdf",
   "reference_workbook_sha256": "ce3aae843d90e72a09287d23966cd03f3f0f5c5dd8f6843f923886dc03542a42",
   "lists": [
     {
