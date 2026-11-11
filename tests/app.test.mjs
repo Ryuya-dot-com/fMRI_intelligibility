@@ -187,41 +187,36 @@ test('system milliseconds, monotonic clocks, browser queue delay and audio posit
   assert.equal(session.trials[1].interrupted_system_epoch_ms, session.completed_system_epoch_ms);
 });
 
-test('IME composition stays editable; committed non-hiragana cannot be submitted', async () => {
+test('IME composition stays editable and mixed-script answers can be submitted unchanged', async () => {
   const h = await harness(); await h.start(); h.media.end();
-  assert.equal(h.saved.response_format, 'hiragana-v1');
+  assert.equal(h.saved.response_format, 'mixed-script-v1');
   h.el('response').emit('compositionstart');
   h.el('response').value = 'kyo';
   h.el('response').emit('input', {data: 'kyo', inputType: 'insertCompositionText', isComposing: true});
   assert.equal(h.el('next').disabled, true);
   assert.equal(h.el('response-error').textContent, '');
-  assert.equal(h.el('response').value, 'kyo', 'composition is not deleted or transliterated');
+  assert.equal(h.el('response').value, 'kyo');
   h.el('response').value = '今日';
   h.el('response').emit('compositionend', {data: '今日'});
-  assert.equal(h.el('next').disabled, true);
-  assert.match(h.el('response-error').textContent, /ひらがな/);
-  await h.el('next').onclick();
-  assert.equal(h.media.plays, 1);
-  for (const value of ['ガッコウ', 'ｶﾞｯｺｳ', 'abc', '１２３', '123', 'ねこ😀']) {
-    h.el('response').emit('paste');
-    h.el('response').value = value;
-    h.el('response').emit('input', {data: value, inputType: 'insertFromPaste', isComposing: false});
-    assert.equal(h.el('next').disabled, true);
-    assert.equal(h.el('response').value, value, 'rejected text remains available for correction and logging');
-    await h.el('next').onclick();
-    assert.equal(h.media.plays, 1);
-  }
-  h.el('response').value = 'きょう、ぱーてぃー。';
-  h.el('response').emit('input', {data: 'きょう、ぱーてぃー。', inputType: 'insertText', isComposing: false});
   assert.equal(h.el('next').disabled, false);
   assert.equal(h.el('response-error').textContent, '');
   await h.el('next').onclick(); await tick();
-  assert.equal(h.saved.trials[0].response, 'きょう、ぱーてぃー。');
-  assert.equal(h.media.plays, 2);
+  assert.equal(h.saved.trials[0].response, '今日');
+  assert.equal(h.saved.trials[0].score_status, 'pending_reading');
+  for (const [i, value] of ['ガッコウ', 'ｶﾞｯｺｳ', 'abc', '１２３', '123', 'ねこ😀'].entries()) {
+    h.media.end();
+    h.el('response').emit('paste');
+    h.el('response').value = value;
+    h.el('response').emit('input', {data: value, inputType: 'insertFromPaste', isComposing: false});
+    assert.equal(h.el('next').disabled, false);
+    assert.equal(h.el('response-error').textContent, '');
+    await h.el('next').onclick(); await tick();
+    assert.equal(h.saved.trials[i + 1].response, value);
+  }
   h.media.end();
   await h.el('next').onclick(); await tick();
-  assert.equal(h.saved.trials[1].response, '');
-  assert.equal(h.saved.trials[1].proportion_correct, 0);
+  assert.equal(h.saved.trials[7].response, '');
+  assert.equal(h.saved.trials[7].proportion_correct, 0);
 });
 
 test('aborting during audio records incomplete audio and skips scoring', async () => {

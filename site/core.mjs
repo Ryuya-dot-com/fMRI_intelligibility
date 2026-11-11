@@ -1,4 +1,4 @@
-export const VERSION = 'intelligibility-2026-11-11-v6';
+export const VERSION = 'intelligibility-2026-11-11-v7';
 export const SCORE_VERSION = 'mora-levenshtein-matches-v1';
 export const READING_VERSION = 'kana-normalization-v1';
 export const CONDITIONS = ['Japanese', 'Asian', 'Romance'];
@@ -55,7 +55,7 @@ export function normalizeKana(value) {
 }
 
 export function validResponse(value) {
-  return typeof value === 'string' && value.length <= 2000 && /^[\u3041-\u3096ー。、，．,. \u3000\t\r\n]*$/u.test(value.normalize('NFC'));
+  return typeof value === 'string' && value.length <= 2000 && !/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(value);
 }
 
 export function validKana(value) {

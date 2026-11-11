@@ -1,16 +1,11 @@
 {
-  "recorded_at": "2026-11-11T10:01:59.398873+00:00",
-  "app_version": "intelligibility-2026-11-11-v6",
-  "previous_verification": "design_history/v5_before_anchor_references/verification.json",
-  "publication": {
-    "repository": "Ryuya-dot-com/fMRI_intelligibility",
-    "url": "https://ryuya-dot-com.github.io/fMRI_intelligibility/",
-    "verification_stage": "Local verification before deployment; deployment outcome is recorded in GitHub Actions and the local publication record."
-  },
+  "recorded_at": "2026-11-11T10:19:56.959218+00:00",
+  "app_version": "intelligibility-2026-11-11-v7",
+  "previous_verification": "https://github.com/Ryuya-dot-com/fMRI_intelligibility/blob/13a92e09c10651cee31faf2f1145fe49e0127fcd/verification.json",
   "changes": [
-    "All ten user-provided anchor answer texts matched to the updated MRI CSV; kana answer keys registered with audio hashes.",
-    "New response_format=hiragana-v1: committed kanji, katakana and alphanumerics block submission; IME composition and raw logs preserved.",
-    "Legacy mixed-script archives remain readable and rescorable; anchor references CSV supports v1 archives."
+    "Removed script-based submission blocking; instructions still ask for hiragana.",
+    "response_format=mixed-script-v1; IME composition, length and control-character checks retained.",
+    "Raw mixed-script answers are preserved; unresolved readings remain pending."
   ],
   "design": {
     "main_recordings": 288,
@@ -48,28 +43,14 @@
   "verification": {
     "node_tests": 35,
     "node_test_failures": 0,
-    "main_manifest_identical_except_source_csv_hash": true,
-    "anchor_audio_and_order_identical": true,
-    "all_ten_exact_kana_answers_scored_full_marks": true,
-    "pre_registration_archive_rescoring_tested": true,
-    "IME_composition_and_paste_rejection_simulated": true,
-    "1000_participant_orders_checked": true,
+    "mixed_script_submission_and_raw_preservation_simulated": true,
+    "all_audio_lists_and_keys_unchanged": true,
     "all_298_wav_hashes_checked": true
   },
-  "browser": {
-    "v6_real_browser_check_completed": false,
-    "attempt": "Chrome fetched the manifests and all 58 selected WAVs, but UI observations stopped updating; subsequent native control returned noWindowsAvailable. No task UI or physical IME success claimed.",
-    "previous_v5_evidence": "Prior UI and audio verification remains in previous_verification; it is not evidence of the new hiragana validation working with physical IME."
-  },
-  "unverified": [
-    "Physical Japanese IME on the lab PC",
-    "Real-browser completion of the new input validation",
-    "Independent auditory confirmation of the ten supplied answer texts"
-  ],
   "source_hashes": {
     "site/.nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "site/THIRD_PARTY_NOTICES.txt": "de2662d02ff43174acdd5483bf3d712e0cbf28558e93571538fc3de534010a4a",
-    "site/app.mjs": "a67e53ce03735b8250350c3d3f3dc58b83080f3083237879b61357d588d98482",
+    "site/app.mjs": "c299a420c14674d946cd69eea560dab6b6b03d6ebb77cc4b9565c9ca7ea80e5a",
     "site/audio/AS1_S002.wav": "9c14ca06c80585d480fbadd4a6d494066a0a740843f97457899b65155234289e",
     "site/audio/AS1_S008.wav": "66527333cccd2204201dfb07b3058a7768cd440f196f355dd02b2f2ad8b0121b",
     "site/audio/AS1_S016.wav": "e9955bc1bdc4db31775d0b31372a3668cbd1726973f9231063fc6cb7add473e8",
@@ -368,7 +349,7 @@
     "site/audio/RO4_S095.wav": "01de45e5a6eccc3915d3f829609245d608380c4fabaa8791046a4b633424a72b",
     "site/audio/RO4_S099.wav": "96e417091d8f0bbc34b7616696f40a063cc6320fe0bc8a051d18f1fdb45a8d15",
     "site/audio/RO4_S105.wav": "24440c8849c10f8c2260cdf8f9dac6637d29bf8a67f03657875b12526ee20cab",
-    "site/core.mjs": "705b760400cb21fedf5261375e5b92a35c50735ed5409a7a93184a670e77f8b5",
+    "site/core.mjs": "9fc31221f0e90aff7f8e0c44c85bfa22d23c8eb6dafff4e5428dd1233298dfcd",
     "site/export.mjs": "d98ca757412030dc4c733f31f40dce07f670005b7ffc4ee48f09c6bffe5778c1",
     "site/index.html": "dd9b35635877ff5e9b6e04d17fedbd77066c3b631f2f5231807e70650255f159",
     "site/practice.json": "c03bb46fe11997e01132b970406fdb2983596c79c221fcc69e36765662f02c1f",
@@ -380,8 +361,8 @@
     "site/vendor/fflate-0.8.2.mjs": "8cc1f687e0159e977addb6b85e274dbd11e622cf151f4fcb7b85d49622ea43e7",
     "site/vendor/fflate-LICENSE.txt": "805f6cb28bb8b6d3a0badd83c93bccd9671fa01a3b4b92b7042b0743325ac243",
     "tests/anchor_references.test.mjs": "89c9373a66ffb7d7324b3993ea67e8547f6f533b82b6a47d3cd85ac43ba0f140",
-    "tests/app.test.mjs": "5bcdac51f23d848a269092b43866ffc4cf572a1c660cdc21d941bc330712a5c0",
-    "tests/core.test.mjs": "b8d83bc4b12d380445e2b65c61fcddc009ab8a5b00e9cb3cc6f8d7335daeac66",
+    "tests/app.test.mjs": "a0a48a0746248b19cf0a6b2592c1961c1b2685f20344c1e7e534984d24de121e",
+    "tests/core.test.mjs": "7026a52936ab38644408387df385065b8448877f1a82f6e95b7c71e262803a92",
     "tests/export.test.mjs": "1170d4d56f851357a8c84027aa14a7ffac341c100d7f8c168bb72923fbc37f43",
     "tools/analyze.mjs": "3b83787a33ed0bf4865fd0893131bf207d7690a2b603a3b1b92571a7d712f4cf",
     "tools/audio_provenance.json": "2ba29dffc6f4c85c1caea567d2dd65bf66927a5bcd9054041809f0b11eec25ee",
@@ -403,5 +384,18 @@
     "lists/list_5.csv": "a4003ededd57674a5ebe80a45e3064b0bddeaca6ccb55e0037bf1c4ac8b13e39",
     "lists/list_6.csv": "d605fe9bc6d69aade4016b1e5ffc319ff06d7ca1ec7d8823de7b49cb75d910ac",
     "lists/references_review.csv": "1340ecb233b66f8aa4b5ab127addad460476358d596795184856510a723cee6e"
+  },
+  "publication": {
+    "repository": "Ryuya-dot-com/fMRI_intelligibility",
+    "url": "https://ryuya-dot-com.github.io/fMRI_intelligibility/",
+    "verification_stage": "Local tests passed; publication pending"
+  },
+  "unverified": [
+    "Physical Japanese IME on the lab PC",
+    "Independent auditory confirmation of supplied answer texts"
+  ],
+  "browser": {
+    "current_change_real_browser_check_completed": false,
+    "prior_evidence": "See previous_verification; not a claim of current physical IME verification."
   }
 }
